@@ -6,7 +6,7 @@
     "esModuleInterop": true,
     "jsx": "react-native",
     "lib": ["DOM", "ESNext"],
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {

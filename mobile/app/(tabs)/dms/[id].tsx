@@ -1,0 +1,293 @@
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useState, useEffect } from 'react';
+
+import { palette } from '@/constants/Colors';
+import { useQueue } from './_layout';
+import { updateQueue } from '@/services/gistService';
+import type { Queue, PendingReply } from '@/types/queue';
+
+export default function ChatScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const navigation = useNavigation();
+  const router = useRouter();
+  const { queue, onRefresh } = useQueue();
+  
+  const item = queue?.pending?.find(p => p.id === id);
+  
+  const [editedReply, setEditedReply] = useState(item?.suggested_reply || '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (item) {
+      navigation.setOptions({ 
+        headerTitle: item.sender_name,
+        // Optional: Custom header left or right
+      });
+      setEditedReply(item.suggested_reply);
+    }
+  }, [item, navigation]);
+
+  if (!item) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={{ color: palette.text.tertiary }}>Conversation not found or already handled.</Text>
+      </View>
+    );
+  }
+
+  const handleAction = async (action: 'approve' | 'skip') => {
+    if (!queue) return;
+    setIsSubmitting(true);
+    try {
+      const newQueue: Queue = {
+        pending: queue.pending.filter(i => i.id !== item.id),
+        approved: queue.approved,
+        sent: queue.sent,
+        skipped: queue.skipped,
+      };
+
+      if (action === 'approve') {
+        newQueue.approved.push({
+          ...item,
+          final_reply: editedReply,
+        });
+      } else {
+        newQueue.skipped.push(item);
+      }
+
+      await updateQueue(newQueue);
+      onRefresh(); // Trigger global refresh to update sidebar
+      router.replace('/dms'); // Go back to empty state
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Intro Section */}
+        <View style={styles.introContainer}>
+          {item.sender_avatar ? (
+            <Image source={{ uri: item.sender_avatar }} style={styles.introAvatar} />
+          ) : (
+            <View style={[styles.introAvatar, styles.avatarFallback]}>
+              <Text style={styles.avatarFallbackText}>{item.sender_name.charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
+          <Text style={styles.introTitle}>{item.sender_name}</Text>
+          <Text style={styles.introSubtitle}>This is the beginning of your direct message history with @{item.sender_name}.</Text>
+        </View>
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Conversation Context */}
+        {item.conversation_context?.map((msg, index) => {
+          const isMe = msg.startsWith('You:') || msg.startsWith('Me:');
+          const content = msg.split(': ').slice(1).join(': ') || msg;
+          const sender = msg.split(': ')[0];
+
+          return (
+            <View key={`ctx-${index}`} style={styles.messageRow}>
+              {!isMe && (
+                item.sender_avatar ? 
+                  <Image source={{ uri: item.sender_avatar }} style={styles.messageAvatar} /> :
+                  <View style={[styles.messageAvatar, styles.avatarFallbackSmall]}><Text style={styles.avatarFallbackTextSmall}>{item.sender_name.charAt(0).toUpperCase()}</Text></View>
+              )}
+              <View style={styles.messageContent}>
+                <Text style={styles.messageSender}>{isMe ? 'You' : sender}</Text>
+                <Text style={styles.messageText}>{content}</Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Original Message */}
+        <View style={styles.messageRow}>
+          {item.sender_avatar ? 
+            <Image source={{ uri: item.sender_avatar }} style={styles.messageAvatar} /> :
+            <View style={[styles.messageAvatar, styles.avatarFallbackSmall]}><Text style={styles.avatarFallbackTextSmall}>{item.sender_name.charAt(0).toUpperCase()}</Text></View>
+          }
+          <View style={styles.messageContent}>
+            <Text style={styles.messageSender}>{item.sender_name}</Text>
+            <Text style={styles.messageText}>{item.original_message}</Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Input Area */}
+      <View style={styles.inputArea}>
+        <View style={styles.inputContainer}>
+          <Pressable 
+            style={styles.actionButton} 
+            onPress={() => handleAction('skip')}
+            disabled={isSubmitting}
+          >
+            <Ionicons name="close-circle" size={24} color={palette.text.tertiary} />
+          </Pressable>
+          
+          <TextInput
+            style={styles.textInput}
+            value={editedReply}
+            onChangeText={setEditedReply}
+            multiline
+            placeholder="Message..."
+            placeholderTextColor={palette.text.tertiary}
+            editable={!isSubmitting}
+          />
+          
+          <Pressable 
+            style={[styles.sendButton, !editedReply.trim() && styles.sendButtonDisabled]} 
+            onPress={() => handleAction('approve')}
+            disabled={isSubmitting || !editedReply.trim()}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="send" size={18} color="#fff" />
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: palette.dark.background,
+  },
+  centerContainer: {
+    flex: 1,
+    backgroundColor: palette.dark.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  introContainer: {
+    alignItems: 'flex-start',
+    marginTop: 40,
+    marginBottom: 24,
+  },
+  introAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 16,
+  },
+  avatarFallback: {
+    backgroundColor: palette.brand.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarFallbackText: {
+    color: palette.text.primary,
+    fontSize: 32,
+    fontWeight: 'bold',
+  },
+  introTitle: {
+    color: palette.text.primary,
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  introSubtitle: {
+    color: palette.text.secondary,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: palette.dark.border,
+    marginBottom: 24,
+  },
+  messageRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  messageAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 16,
+    marginTop: 4,
+  },
+  avatarFallbackSmall: {
+    backgroundColor: palette.brand.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarFallbackTextSmall: {
+    color: palette.text.primary,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  messageContent: {
+    flex: 1,
+  },
+  messageSender: {
+    color: palette.text.primary,
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  messageText: {
+    color: palette.text.secondary,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  inputArea: {
+    backgroundColor: palette.dark.background,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: palette.dark.border,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: palette.dark.surfaceLight,
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 48,
+  },
+  actionButton: {
+    padding: 4,
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    color: palette.text.primary,
+    fontSize: 16,
+    maxHeight: 120,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  sendButton: {
+    backgroundColor: palette.brand.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  sendButtonDisabled: {
+    backgroundColor: palette.text.tertiary,
+    opacity: 0.5,
+  },
+});

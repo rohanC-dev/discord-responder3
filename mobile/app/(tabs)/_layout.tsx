@@ -42,10 +42,10 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="dms"
         options={{
           title: 'Review',
-          headerTitle: 'DM Responder',
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <Ionicons name="chatbubbles" color={color} size={24} />
           ),

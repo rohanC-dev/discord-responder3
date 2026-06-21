@@ -6,50 +6,32 @@
 const palette = {
   // Core brand colors
   brand: {
-    primary: '#7B6FF0',      // Soft purple (Discord-inspired)
-    primaryLight: '#9B8FF8',
-    primaryDark: '#5B4FD0',
-    secondary: '#5865F2',    // Discord blurple
-    accent: '#00D4AA',       // Mint green for success/approve
-    warning: '#FFA94D',      // Warm orange
-    danger: '#FF6B6B',       // Soft red for skip/delete
+    primary: '#5865F2',   // Discord Blurple
+    secondary: '#EB459E', // Discord Fuchsia
+    success: '#57F287',   // Discord Green
+    warning: '#FEE75C',   // Discord Yellow
+    error: '#ED4245',     // Discord Red
   },
-
-  // Dark theme surfaces
   dark: {
-    background: '#0D0D1A',   // Deep navy-black
-    surface: '#161625',      // Elevated surface
-    surfaceLight: '#1E1E32', // Cards, inputs
-    surfaceHover: '#262640', // Hover state
-    border: '#2A2A45',       // Subtle borders
-    borderLight: '#383860',  // Active borders
+    background: '#313338', // Main chat area
+    surface: '#2B2D31',    // Sidebar / Header
+    surfaceLight: '#383A40', // Hover states / Active item
+    surfaceDark: '#1E1F22',  // Channels list background / Server list
+    border: '#1E1F22',
   },
-
-  // Text hierarchy
   text: {
-    primary: '#FFFFFF',
-    secondary: '#A0A0C0',
-    tertiary: '#6B6B90',
-    inverse: '#0D0D1A',
+    primary: '#F2F3F5',
+    secondary: '#B5BAC1',
+    tertiary: '#949BA4',
+    inverse: '#111214',
   },
-
   // Semantic colors
   status: {
-    pending: '#FFA94D',
-    approved: '#00D4AA',
+    pending: '#FEE75C',
+    approved: '#57F287',
     sent: '#5865F2',
-    skipped: '#6B6B90',
-    expired: '#FF6B6B',
-  },
-
-  // Gradient stops
-  gradients: {
-    brandStart: '#7B6FF0',
-    brandEnd: '#5865F2',
-    surfaceStart: '#1E1E32',
-    surfaceEnd: '#161625',
-    accentStart: '#00D4AA',
-    accentEnd: '#00B894',
+    skipped: '#949BA4',
+    expired: '#ED4245',
   },
 };
 
@@ -61,16 +43,15 @@ export default {
     background: palette.dark.background,
     surface: palette.dark.surface,
     surfaceLight: palette.dark.surfaceLight,
-    surfaceHover: palette.dark.surfaceHover,
+    surfaceHover: palette.dark.surfaceLight,
     border: palette.dark.border,
-    borderLight: palette.dark.borderLight,
+    borderLight: palette.dark.surfaceLight,
     tint: palette.brand.primary,
     primary: palette.brand.primary,
-    primaryLight: palette.brand.primaryLight,
     secondary: palette.brand.secondary,
-    accent: palette.brand.accent,
+    accent: palette.brand.success,
     warning: palette.brand.warning,
-    danger: palette.brand.danger,
+    danger: palette.brand.error,
     tabIconDefault: palette.text.tertiary,
     tabIconSelected: palette.brand.primary,
     ...palette.status,
@@ -82,16 +63,15 @@ export default {
     background: palette.dark.background,
     surface: palette.dark.surface,
     surfaceLight: palette.dark.surfaceLight,
-    surfaceHover: palette.dark.surfaceHover,
+    surfaceHover: palette.dark.surfaceLight,
     border: palette.dark.border,
-    borderLight: palette.dark.borderLight,
+    borderLight: palette.dark.surfaceLight,
     tint: palette.brand.primary,
     primary: palette.brand.primary,
-    primaryLight: palette.brand.primaryLight,
     secondary: palette.brand.secondary,
-    accent: palette.brand.accent,
+    accent: palette.brand.success,
     warning: palette.brand.warning,
-    danger: palette.brand.danger,
+    danger: palette.brand.error,
     tabIconDefault: palette.text.tertiary,
     tabIconSelected: palette.brand.primary,
     ...palette.status,

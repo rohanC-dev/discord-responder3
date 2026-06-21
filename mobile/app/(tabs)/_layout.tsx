@@ -3,7 +3,7 @@
  * Dark theme with custom icons and badge support.
  */
 
-import { SymbolView } from 'expo-symbols';
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 
@@ -47,15 +47,7 @@ export default function TabLayout() {
           title: 'Review',
           headerTitle: 'DM Responder',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'bubble.left.and.bubble.right',
-                android: 'chat',
-                web: 'chat',
-              }}
-              tintColor={color}
-              size={24}
-            />
+            <Ionicons name="chatbubbles" color={color} size={24} />
           ),
         }}
       />
@@ -64,15 +56,7 @@ export default function TabLayout() {
         options={{
           title: 'History',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'clock.arrow.circlepath',
-                android: 'history',
-                web: 'history',
-              }}
-              tintColor={color}
-              size={24}
-            />
+            <Ionicons name="time" color={color} size={24} />
           ),
         }}
       />
@@ -81,15 +65,7 @@ export default function TabLayout() {
         options={{
           title: 'Settings',
           tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'gearshape.fill',
-                android: 'settings',
-                web: 'settings',
-              }}
-              tintColor={color}
-              size={24}
-            />
+            <Ionicons name="settings" color={color} size={24} />
           ),
         }}
       />

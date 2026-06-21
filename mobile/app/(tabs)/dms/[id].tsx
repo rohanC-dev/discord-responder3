@@ -80,19 +80,26 @@ export default function ChatScreen() {
 
         {/* Conversation Context */}
         {item.conversation_context?.map((msg, index) => {
-          const isMe = msg.startsWith('You:') || msg.startsWith('Me:');
+          // Identify if the message is from the user
+          const isMe = msg.startsWith('You:') || msg.startsWith('Me:') || !msg.startsWith(`${item.sender_name}:`);
           const content = msg.split(': ').slice(1).join(': ') || msg;
-          const sender = msg.split(': ')[0];
+          const sender = isMe ? 'You' : item.sender_name;
 
           return (
             <View key={`ctx-${index}`} style={styles.messageRow}>
-              {!isMe && (
+              {isMe ? (
+                <View style={[styles.messageAvatar, styles.avatarFallbackSmall, { backgroundColor: palette.brand.primary }]}>
+                  <Text style={styles.avatarFallbackTextSmall}>Me</Text>
+                </View>
+              ) : (
                 item.sender_avatar ? 
                   <Image source={{ uri: item.sender_avatar }} style={styles.messageAvatar} /> :
-                  <View style={[styles.messageAvatar, styles.avatarFallbackSmall]}><Text style={styles.avatarFallbackTextSmall}>{item.sender_name.charAt(0).toUpperCase()}</Text></View>
+                  <View style={[styles.messageAvatar, styles.avatarFallbackSmall]}>
+                    <Text style={styles.avatarFallbackTextSmall}>{item.sender_name.charAt(0).toUpperCase()}</Text>
+                  </View>
               )}
               <View style={styles.messageContent}>
-                <Text style={styles.messageSender}>{isMe ? 'You' : sender}</Text>
+                <Text style={styles.messageSender}>{sender}</Text>
                 <Text style={styles.messageText}>{content}</Text>
               </View>
             </View>

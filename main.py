@@ -139,8 +139,8 @@ def step_2_generate_suggestions(new_items: list[dict], queue: dict) -> dict:
             if p.get("channel_id") == channel_id and p.get("status") == "pending"
         ]
         if existing:
-            print(f"      ⏭️  Already have a pending suggestion for this channel. Skipping.")
-            continue
+            print(f"      🗑️  Found existing pending suggestion. Replacing with updated context.")
+            queue["pending"] = [p for p in queue["pending"] if p.get("id") != existing[0]["id"]]
 
         # Get conversation history for context
         history = discord_client.get_conversation_history(channel_id, limit=50)
@@ -158,7 +158,8 @@ def step_2_generate_suggestions(new_items: list[dict], queue: dict) -> dict:
             context = []
             for msg in history[-5:]:
                 author = msg.get("author", {})
-                name = author.get("global_name") or author.get("username", "?")
+                is_me = author.get("id") == config.NOTIFY_USER_ID
+                name = "You" if is_me else (author.get("global_name") or author.get("username", "?"))
                 context.append(f"{name}: {msg.get('content', '')[:100]}")
 
             suggestion = {

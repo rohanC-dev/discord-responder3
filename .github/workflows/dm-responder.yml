@@ -1,0 +1,52 @@
+name: Discord DM Auto-Responder
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    # Allow manual trigger for testing
+
+# Prevent concurrent runs
+concurrency:
+  group: dm-responder
+  cancel-in-progress: false
+
+jobs:
+  check-and-respond:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4  # Prevent overlap with next 5-min run
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 🚀 Run DM Responder Pipeline
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          NOTIFY_USER_ID: ${{ secrets.NOTIFY_USER_ID }}
+          CHECK_INTERVAL: ${{ secrets.CHECK_INTERVAL }}
+          AUTO_REPLY_DELAY_MIN: ${{ secrets.AUTO_REPLY_DELAY_MIN }}
+          AUTO_REPLY_DELAY_MAX: ${{ secrets.AUTO_REPLY_DELAY_MAX }}
+          MAX_HISTORY_MESSAGES: ${{ secrets.MAX_HISTORY_MESSAGES }}
+          SUGGESTION_EXPIRY_HOURS: ${{ secrets.SUGGESTION_EXPIRY_HOURS }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+          AI_TEMPERATURE: ${{ secrets.AI_TEMPERATURE }}
+          AI_MAX_TOKENS: ${{ secrets.AI_MAX_TOKENS }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          WHITELIST_USER_IDS: ${{ secrets.WHITELIST_USER_IDS }}
+          BLACKLIST_USER_IDS: ${{ secrets.BLACKLIST_USER_IDS }}
+        run: python main.py

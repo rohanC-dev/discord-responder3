@@ -316,4 +316,35 @@ def run_pipeline():
 
 
 if __name__ == "__main__":
-    run_pipeline()
+    # Run for 5 hours and 50 minutes total to stay safely under GitHub Actions 6 hour limit
+    MAX_RUN_TIME_SECONDS = (5 * 3600) + (50 * 60)
+    LOOP_INTERVAL_SECONDS = int(config.CHECK_INTERVAL) if hasattr(config, 'CHECK_INTERVAL') else 300
+    
+    start_time = time.time()
+    print(f"🔄 Starting continuous 6-hour runner. Will loop every {LOOP_INTERVAL_SECONDS/60:.1f} minutes.")
+    
+    iteration = 1
+    while True:
+        elapsed = time.time() - start_time
+        if elapsed >= MAX_RUN_TIME_SECONDS:
+            print(f"\n⏳ Reached maximum execution time ({elapsed/60:.1f} minutes). Shutting down gracefully.")
+            break
+            
+        print("\n" + "="*80)
+        print(f"▶️ RUNNING ITERATION {iteration} (Elapsed: {elapsed/60:.1f}m / {MAX_RUN_TIME_SECONDS/60:.1f}m limit)")
+        print("="*80)
+        
+        try:
+            run_pipeline()
+        except Exception as e:
+            print(f"❌ Error in iteration {iteration}: {e}")
+        
+        iteration += 1
+        
+        # Calculate how long to sleep
+        time_left_in_job = MAX_RUN_TIME_SECONDS - (time.time() - start_time)
+        sleep_time = min(LOOP_INTERVAL_SECONDS, time_left_in_job)
+        
+        if sleep_time > 0:
+            print(f"\n💤 Sleeping for {sleep_time/60:.1f} minutes until next check...")
+            time.sleep(sleep_time)

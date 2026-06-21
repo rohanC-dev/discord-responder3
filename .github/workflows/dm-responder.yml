@@ -49,4 +49,4 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
           WHITELIST_USER_IDS: ${{ secrets.WHITELIST_USER_IDS }}
           BLACKLIST_USER_IDS: ${{ secrets.BLACKLIST_USER_IDS }}
-        run: python main.py
+        run: python -u main.py

@@ -23,7 +23,10 @@ def _get_required(key: str) -> str:
 
 def _get_optional(key: str, default: str = "") -> str:
     """Get an optional environment variable with a default."""
-    return os.getenv(key, default)
+    value = os.getenv(key)
+    if value is None or value.strip() == "":
+        return default
+    return value
 
 
 def _get_int(key: str, default: int) -> int:

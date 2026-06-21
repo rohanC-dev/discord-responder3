@@ -28,13 +28,18 @@ function CustomDrawerContent(props: any) {
   // Get unique senders from pending replies
   const pendingItems = queue?.pending || [];
   
-  // Group by channel_id (or sender_id)
-  const uniqueConversations = pendingItems.reduce((acc, curr) => {
-    if (!acc.find(item => item.channel_id === curr.channel_id)) {
-      acc.push(curr);
+  // Group by channel_id and count pending messages
+  const convMap = new Map<string, { item: QueueItem; count: number }>();
+  pendingItems.forEach(curr => {
+    if (convMap.has(curr.channel_id)) {
+      convMap.get(curr.channel_id)!.count++;
+    } else {
+      convMap.set(curr.channel_id, { item: curr, count: 1 });
     }
-    return acc;
-  }, [] as QueueItem[]);
+  });
+
+  const uniqueConversations = Array.from(convMap.values())
+    .sort((a, b) => new Date(b.item.created_at).getTime() - new Date(a.item.created_at).getTime());
 
   return (
     <DrawerContentScrollView 
@@ -51,7 +56,7 @@ function CustomDrawerContent(props: any) {
         </View>
       )}
 
-      {uniqueConversations.map((item) => {
+      {uniqueConversations.map(({ item, count }) => {
         const isActive = pathname === `/dms/${item.id}`;
         
         return (
@@ -73,12 +78,15 @@ function CustomDrawerContent(props: any) {
                   </Text>
                 </View>
               )}
-              {/* Online status dot */}
-              <View style={styles.statusDot} />
             </View>
             <Text style={[styles.friendName, isActive && styles.friendNameActive]} numberOfLines={1}>
               {item.sender_name}
             </Text>
+            {count > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+              </View>
+            )}
           </Pressable>
         );
       })}
@@ -208,16 +216,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  statusDot: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: palette.brand.success,
-    borderWidth: 2,
-    borderColor: palette.dark.surfaceDark,
+  badge: {
+    backgroundColor: palette.brand.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    marginLeft: 8,
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   friendName: {
     color: palette.text.secondary,

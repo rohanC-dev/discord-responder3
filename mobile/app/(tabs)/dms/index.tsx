@@ -1,23 +1,67 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Alert } from 'react-native';
 import { palette } from '@/constants/Colors';
 import { useQueue } from './_layout';
+import ReplyCard from '@/components/ReplyCard';
+import { approveReply, skipReply } from '@/services/gistService';
 
 export default function DMIndexScreen() {
-  const { queue } = useQueue();
-  const pendingCount = queue?.pending?.length || 0;
+  const { queue, onRefresh } = useQueue();
+
+  const handleApprove = async (itemId: string) => {
+    try {
+      await approveReply(itemId);
+      onRefresh();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const handleSkip = async (itemId: string) => {
+    try {
+      await skipReply(itemId);
+      onRefresh();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  if (!queue) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={palette.brand.primary} />
+      </View>
+    );
+  }
+
+  const pendingCount = queue.pending?.length || 0;
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        <Ionicons name="chatbubble-ellipses-outline" size={64} color={palette.text.tertiary} />
-        <Text style={styles.title}>Direct Messages</Text>
-        <Text style={styles.subtitle}>
-          {pendingCount > 0 
-            ? `You have ${pendingCount} pending replies.\nSwipe right or use the menu to select a friend.` 
-            : `You're all caught up! No pending replies.`}
-        </Text>
-      </View>
+      <FlatList
+        data={queue.pending}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Text style={styles.title}>Pending Suggestions</Text>
+            <Text style={styles.subtitle}>
+              {pendingCount} message{pendingCount !== 1 ? 's' : ''} waiting for your review.
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <ReplyCard
+            item={item}
+            onApprove={handleApprove}
+            onSkip={handleSkip}
+          />
+        )}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>You're all caught up! No pending replies.</Text>
+          </View>
+        }
+      />
     </View>
   );
 }
@@ -26,25 +70,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: palette.dark.background,
+  },
+  centerContainer: {
+    flex: 1,
+    backgroundColor: palette.dark.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
-    alignItems: 'center',
-    padding: 20,
-    maxWidth: 300,
+  listContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  header: {
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
   title: {
     color: palette.text.primary,
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
-    color: palette.text.tertiary,
+    color: palette.text.secondary,
     fontSize: 15,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: palette.text.tertiary,
+    fontSize: 16,
     textAlign: 'center',
-    lineHeight: 22,
   },
 });

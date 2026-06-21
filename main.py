@@ -302,15 +302,10 @@ def run_pipeline():
     print("💾 Saving state and queue to Gist...")
     print("=" * 60)
 
-    if gist_store.save_state(state):
-        print("   ✅ State saved")
+    if gist_store.save_all(state, queue):
+        print("   ✅ State and Queue saved")
     else:
-        print("   ❌ Failed to save state")
-
-    if gist_store.save_queue(queue):
-        print("   ✅ Queue saved")
-    else:
-        print("   ❌ Failed to save queue")
+        print("   ❌ Failed to save State and Queue")
 
     elapsed = time.time() - start
     print(f"\n🏁 Pipeline complete in {elapsed:.1f}s")

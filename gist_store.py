@@ -168,24 +168,41 @@ def get_queue() -> dict:
     return read_gist("queue.json")
 
 
-def save_queue(queue: dict) -> bool:
-    """Write the reply queue to Gist."""
-    from datetime import datetime, timezone
-    queue["last_updated"] = datetime.now(timezone.utc).isoformat()
-    return write_gist("queue.json", queue)
-
-
 def get_state() -> dict:
     """Read the bot state from Gist."""
     return read_gist("state.json")
 
-
-def save_state(state: dict) -> bool:
-    """Write the bot state to Gist."""
+def save_all(state: dict, queue: dict) -> bool:
+    """Write both state and queue to Gist in a single API call to avoid rate limits."""
     from datetime import datetime, timezone
+    
     state["last_run"] = datetime.now(timezone.utc).isoformat()
     state["run_count"] = state.get("run_count", 0) + 1
-    return write_gist("state.json", state)
+    queue["last_updated"] = datetime.now(timezone.utc).isoformat()
+    
+    url = f"{GIST_API_BASE}/gists/{config.GIST_ID}"
+    payload = {
+        "files": {
+            "state.json": {"content": json.dumps(state, indent=2, default=str)},
+            "queue.json": {"content": json.dumps(queue, indent=2, default=str)}
+        }
+    }
+    
+    for attempt in range(3):
+        try:
+            response = _session.patch(url, json=payload)
+            if response.status_code == 200:
+                return True
+            else:
+                print(f"⚠️  Gist write error {response.status_code}: {response.text[:200]}")
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                    continue
+        except requests.RequestException as e:
+            print(f"⚠️  Gist write request error (attempt {attempt + 1}/3): {e}")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    return False
 
 
 def add_pending_reply(queue: dict, item: dict) -> dict:

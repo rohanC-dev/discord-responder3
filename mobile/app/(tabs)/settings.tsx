@@ -109,7 +109,7 @@ export default function SettingsScreen() {
       <View style={styles.statusCard}>
         <View style={styles.statusHeader}>
           <StatusDot
-            color={isConnected ? palette.brand.accent : palette.brand.danger}
+            color={isConnected ? palette.brand.success : palette.brand.error}
             size={10}
             pulse={isConnected === true}
           />
@@ -121,7 +121,7 @@ export default function SettingsScreen() {
           <Text
             style={[
               styles.statusMessage,
-              { color: isConnected ? palette.brand.accent : palette.brand.danger },
+              { color: isConnected ? palette.brand.success : palette.brand.error },
             ]}
           >
             {connectionMessage}
@@ -217,7 +217,7 @@ export default function SettingsScreen() {
           disabled={isTesting}
         >
           {isTesting ? (
-            <ActivityIndicator size="small" color={palette.brand.primaryLight} />
+            <ActivityIndicator size="small" color={palette.brand.primary} />
           ) : (
             <Text style={styles.testButtonText}>🔄 Test</Text>
           )}
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
   testButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: palette.brand.primaryLight,
+    color: palette.brand.primary,
   },
   buttonPressed: {
     opacity: 0.7,
@@ -394,18 +394,18 @@ const styles = StyleSheet.create({
   dangerTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: palette.brand.danger,
+    color: palette.brand.error,
     marginBottom: 12,
   },
   clearButton: {
-    backgroundColor: palette.brand.danger + '15',
+    backgroundColor: palette.brand.error + '15',
     borderWidth: 1,
-    borderColor: palette.brand.danger + '30',
+    borderColor: palette.brand.error + '30',
   },
   clearButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: palette.brand.danger,
+    color: palette.brand.error,
   },
   aboutSection: {
     alignItems: 'center',

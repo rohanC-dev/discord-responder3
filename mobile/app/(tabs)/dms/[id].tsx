@@ -5,8 +5,8 @@ import { useState, useEffect } from 'react';
 
 import { palette } from '@/constants/Colors';
 import { useQueue } from './_layout';
-import { updateQueue } from '@/services/gistService';
-import type { Queue, PendingReply } from '@/types/queue';
+import { approveReply, skipReply } from '@/services/gistService';
+import type { Queue, QueueItem } from '@/types/queue';
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,25 +41,13 @@ export default function ChatScreen() {
     if (!queue) return;
     setIsSubmitting(true);
     try {
-      const newQueue: Queue = {
-        pending: queue.pending.filter(i => i.id !== item.id),
-        approved: queue.approved,
-        sent: queue.sent,
-        skipped: queue.skipped,
-      };
-
       if (action === 'approve') {
-        newQueue.approved.push({
-          ...item,
-          final_reply: editedReply,
-        });
+        await approveReply(item.id, editedReply);
       } else {
-        newQueue.skipped.push(item);
+        await skipReply(item.id);
       }
-
-      await updateQueue(newQueue);
       onRefresh(); // Trigger global refresh to update sidebar
-      router.replace('/dms'); // Go back to empty state
+      router.replace('/(tabs)/dms' as any); // Go back to empty state
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {

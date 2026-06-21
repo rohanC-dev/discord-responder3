@@ -39,10 +39,10 @@ export default function ReplyCard({ item, onApprove, onSkip, isProcessing }: Rep
 
   const statusColor = {
     pending: palette.brand.warning,
-    approved: palette.brand.accent,
+    approved: palette.brand.success,
     sent: palette.brand.secondary,
     skipped: palette.text.tertiary,
-    expired: palette.brand.danger,
+    expired: palette.brand.error,
   }[item.status];
 
   return (
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   bubbleLabelOutgoing: {
     fontSize: 10,
     fontWeight: '700',
-    color: palette.brand.primaryLight,
+    color: palette.brand.primary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 6,
@@ -310,9 +310,9 @@ const styles = StyleSheet.create({
     borderColor: palette.brand.primary + '40',
   },
   approveButton: {
-    backgroundColor: palette.brand.accent + '20',
+    backgroundColor: palette.brand.success + '20',
     borderWidth: 1,
-    borderColor: palette.brand.accent + '40',
+    borderColor: palette.brand.success + '40',
   },
   skipButtonText: {
     fontSize: 14,
@@ -322,12 +322,12 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: palette.brand.primaryLight,
+    color: palette.brand.primary,
   },
   approveButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: palette.brand.accent,
+    color: palette.brand.success,
   },
   buttonPressed: {
     opacity: 0.7,

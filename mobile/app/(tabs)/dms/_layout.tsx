@@ -7,7 +7,7 @@ import { useState, useCallback, createContext, useContext } from 'react';
 
 import { palette } from '@/constants/Colors';
 import { fetchQueue } from '@/services/gistService';
-import type { Queue, PendingReply } from '@/types/queue';
+import type { Queue, QueueItem } from '@/types/queue';
 
 // Provide queue data to child screens
 export const QueueContext = createContext<{
@@ -34,7 +34,7 @@ function CustomDrawerContent(props: any) {
       acc.push(curr);
     }
     return acc;
-  }, [] as PendingReply[]);
+  }, [] as QueueItem[]);
 
   return (
     <DrawerContentScrollView 
@@ -59,7 +59,7 @@ function CustomDrawerContent(props: any) {
             key={item.id}
             style={[styles.friendItem, isActive && styles.friendItemActive]}
             onPress={() => {
-              router.push(`/dms/${item.id}`);
+              router.push(`/(tabs)/dms/${item.id}` as any);
               props.navigation.closeDrawer();
             }}
           >

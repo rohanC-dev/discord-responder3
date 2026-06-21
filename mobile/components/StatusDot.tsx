@@ -11,7 +11,7 @@ interface StatusDotProps {
   pulse?: boolean;
 }
 
-export default function StatusDot({ color = palette.brand.accent, size = 8, pulse = true }: StatusDotProps) {
+export default function StatusDot({ color = palette.brand.success, size = 8, pulse = true }: StatusDotProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
 

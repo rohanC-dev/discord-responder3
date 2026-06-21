@@ -84,9 +84,9 @@ export default function HistoryScreen() {
 
   const statusConfig = {
     sent: { color: palette.brand.secondary, icon: '📤', label: 'Sent' },
-    approved: { color: palette.brand.accent, icon: '✅', label: 'Queued' },
+    approved: { color: palette.brand.success, icon: '✅', label: 'Queued' },
     skipped: { color: palette.text.tertiary, icon: '⏭️', label: 'Skipped' },
-    expired: { color: palette.brand.danger, icon: '⏰', label: 'Expired' },
+    expired: { color: palette.brand.error, icon: '⏰', label: 'Expired' },
     pending: { color: palette.brand.warning, icon: '⏳', label: 'Pending' },
   };
 
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     color: palette.text.tertiary,
   },
   filterTabTextActive: {
-    color: palette.brand.primaryLight,
+    color: palette.brand.primary,
   },
   listContent: {
     paddingVertical: 8,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   replyLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: palette.brand.primaryLight,
+    color: palette.brand.primary,
     width: 42,
     marginTop: 1,
   },

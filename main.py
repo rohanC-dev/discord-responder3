@@ -389,7 +389,7 @@ def run_pipeline(workflow_start_time_iso: str = None):
 if __name__ == "__main__":
     # Run for 5 hours and 50 minutes total to stay safely under GitHub Actions 6 hour limit
     MAX_RUN_TIME_SECONDS = (5 * 3600) + (50 * 60)
-    LOOP_INTERVAL_SECONDS = int(config.CHECK_INTERVAL) if hasattr(config, 'CHECK_INTERVAL') else 300
+    LOOP_INTERVAL_SECONDS = 5
     
     start_time = time.time()
     start_time_iso = datetime.now(timezone.utc).isoformat()

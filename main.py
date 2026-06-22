@@ -325,6 +325,44 @@ def step_5_process_generation_requests(queue: dict) -> dict:
     return queue
 
 
+def _merge_queues(local_queue: dict, fresh_queue: dict) -> dict:
+    """
+    Merge the in-memory queue (with new suggestions from Step 2) with the
+    freshly-read Gist queue (which may contain mobile app approvals/skips).
+
+    Strategy:
+      - Start from the fresh Gist queue (it has the latest approvals/skips).
+      - Add any NEW pending items from local_queue that don't exist in fresh
+        (these are suggestions generated in this iteration's Step 2).
+      - Carry over generation_requests from the fresh queue.
+    """
+    # Collect IDs already known in the fresh queue (across all lists)
+    fresh_ids = set()
+    for key in ("pending", "approved", "sent", "skipped"):
+        for item in fresh_queue.get(key, []):
+            if item.get("id"):
+                fresh_ids.add(item["id"])
+
+    # Find genuinely new pending items from local that the Gist doesn't know about
+    new_pending = [
+        item for item in local_queue.get("pending", [])
+        if item.get("id") and item["id"] not in fresh_ids
+    ]
+
+    if new_pending:
+        fresh_queue.setdefault("pending", []).extend(new_pending)
+        print(f"   🔀 Merged {len(new_pending)} new suggestion(s) with latest Gist queue")
+
+    # Use fresh generation_requests (mobile app may have added new ones)
+    # but also keep any locally-updated ones
+    fresh_gen_ids = {r.get("id") for r in fresh_queue.get("generation_requests", [])}
+    for req in local_queue.get("generation_requests", []):
+        if req.get("id") and req["id"] not in fresh_gen_ids:
+            fresh_queue.setdefault("generation_requests", []).append(req)
+
+    return fresh_queue
+
+
 def run_pipeline(workflow_start_time_iso: str = None):
     """Execute the full pipeline."""
     start = time.time()
@@ -356,6 +394,11 @@ def run_pipeline(workflow_start_time_iso: str = None):
 
         # Step 2: Generate AI suggestions for new messages
         queue = step_2_generate_suggestions(new_items, queue)
+
+        # Re-read queue from Gist to pick up any mobile app approvals/skips
+        # that happened while we were processing Steps 1-2
+        fresh_queue = gist_store.get_queue()
+        queue = _merge_queues(local_queue=queue, fresh_queue=fresh_queue)
 
         # Step 3: Send any approved replies
         queue = step_3_send_approved(queue)

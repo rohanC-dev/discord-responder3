@@ -170,7 +170,7 @@ def step_2_generate_suggestions(new_items: list[dict], queue: dict) -> dict:
             suggestion = {
                 "id": str(uuid.uuid4()),
                 "channel_id": channel_id,
-                "message_id": latest["id"],
+                "message_id": latest["message_id"],
                 "sender_name": sender_name,
                 "sender_id": latest["sender_id"],
                 "sender_avatar": latest["sender_avatar"],

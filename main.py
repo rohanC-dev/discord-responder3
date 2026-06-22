@@ -145,12 +145,17 @@ def step_2_generate_suggestions(new_items: list[dict], queue: dict) -> dict:
         # Get conversation history for context
         history = discord_client.get_conversation_history(channel_id, limit=50)
 
-        # Generate AI reply
+        # Step 2a: Analyze writing style
+        print(f"      🔍 Analyzing writing style...")
+        style_profile = ai_responder.analyze_style(history, config.NOTIFY_USER_ID)
+
+        # Step 2b: Generate AI reply
         suggested_reply = ai_responder.generate_reply(
             conversation_history=history,
             sender_name=sender_name,
             original_message=latest["content"],
-            my_user_id=config.NOTIFY_USER_ID
+            my_user_id=config.NOTIFY_USER_ID,
+            style_profile=style_profile
         )
 
         if suggested_reply:

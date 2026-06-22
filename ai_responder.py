@@ -6,134 +6,157 @@ Works with any OpenAI-compatible API (OpenRouter, OpenAI, local Ollama, etc.)
 
 import json
 import time
+import re
 import requests
 import config
 
+# Regex to match Unicode emojis (covers most common ranges)
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F1E0-\U0001F1FF"  # flags
+    "\U00002702-\U000027B0"  # dingbats
+    "\U000024C2-\U0001F251"  # misc
+    "\U0001F900-\U0001F9FF"  # supplemental
+    "\U0001FA00-\U0001FA6F"  # chess symbols
+    "\U0001FA70-\U0001FAFF"  # symbols extended
+    "\U00002600-\U000026FF"  # misc symbols
+    "\U0000FE00-\U0000FE0F"  # variation selectors
+    "\U0000200D"             # zero width joiner
+    "\U00002764"             # heart
+    "]+",
+    flags=re.UNICODE,
+)
 
-def _build_style_analysis_prompt(my_messages: list[str]) -> str:
-    """
-    Build a prompt segment that analyzes the user's messaging style
-    from their sent messages.
-    """
-    if not my_messages:
-        return "Respond in a casual, friendly tone."
-
-    # Take a sample of recent messages to analyze style
-    sample = my_messages[-30:]
-    sample_text = "\n".join(f"- {msg}" for msg in sample)
-
-    return f"""Analyze these example messages from the user and mimic their exact style:
-
-{sample_text}
-
-Key aspects to match:
-- Capitalization patterns (do they capitalize? all lowercase? mixed?)
-- Punctuation usage (periods, exclamation marks, question marks, or none?)
-- Emoji/emoticon usage
-- Abbreviations and slang (u, ur, gonna, wanna, lol, lmao, etc.)
-- Sentence length and structure
-- Overall tone (casual, formal, energetic, chill, etc.)
-- Any distinctive speech patterns or catchphrases"""
+def _strip_emoji(text: str) -> str:
+    """Remove Unicode emojis from text, preserving Discord custom emotes."""
+    return _EMOJI_RE.sub("", text).strip()
 
 
-def _build_conversation_context(messages: list[dict], my_user_id: str) -> tuple[list[dict], list[str]]:
-    """
-    Convert Discord messages into AI conversation format.
-    Also extracts the user's own messages for style analysis.
-    
-    Returns:
-        Tuple of (conversation_messages, my_message_texts)
-    """
-    conversation = []
-    my_messages = []
+STYLE_SYSTEM_PROMPT = """\
+You are a writing-style analyst. Given a conversation between two people, \
+analyze the TARGET USER's writing style in detail.
 
+Focus on:
+- Average message length (short/medium/long)
+- Capitalization habits (all lowercase, normal, ALL CAPS, etc.)
+- Punctuation style (no punctuation, normal, excessive !!! or ???)
+- Emoji/emoticon usage (which ones, how often)
+- Slang, abbreviations, internet speak (lol, lmao, ngl, fr, etc.)
+- Tone (casual, formal, playful, sarcastic, dry, etc.)
+- Common phrases or filler words they repeat
+- How they start/end messages
+- Whether they use multiple short messages or one long message
+- Response patterns (do they ask questions back? react to things?)
+
+Return a concise style profile as bullet points. This will be used to \
+generate responses that sound exactly like them.
+"""
+
+
+def analyze_style(messages: list[dict], my_user_id: str) -> str:
+    """Analyze the user's writing style from conversation messages."""
+    lines: list[str] = []
     for msg in messages:
         author_id = msg.get("author", {}).get("id", "")
-        content = msg.get("content", "")
         author_name = msg.get("author", {}).get("global_name") or msg.get("author", {}).get("username", "Unknown")
-
+        content = msg.get("content", "")
         if not content.strip():
-            continue  # Skip empty messages (embeds, attachments only)
+            continue
+            
+        label = "TARGET USER" if author_id == my_user_id else author_name
+        lines.append(f"[{label}]: {content}")
 
-        if author_id == my_user_id:
-            my_messages.append(content)
-            conversation.append({
-                "role": "assistant",
-                "content": content
-            })
-        else:
-            conversation.append({
-                "role": "user",
-                "content": f"[{author_name}]: {content}"
-            })
+    if not lines:
+        return "No text messages found to analyze style."
 
-    return conversation, my_messages
+    conversation_text = "\n".join(lines)
+    
+    messages_payload = [
+        {"role": "system", "content": STYLE_SYSTEM_PROMPT},
+        {"role": "user", "content": f"Analyze TARGET USER's writing style:\n\n{conversation_text}"},
+    ]
+    
+    return _call_ai_api(messages_payload, temperature=0.3) or "Respond casually."
+
+
+RESPONSE_SYSTEM_PROMPT = """\
+You are ghostwriting a Discord DM reply for someone. You must sound EXACTLY \
+like them — matching their style, tone, slang, emoji usage, capitalization, \
+punctuation, and message length perfectly.
+
+Rules:
+- You are replying AS the target user in a casual Discord DM conversation.
+- Match the style profile EXACTLY. If they type in all lowercase with no \
+  punctuation, you do the same. If they use lots of emojis, you do too.
+- Keep the reply natural and contextually relevant to the conversation.
+- Don't be generic or robotic. Be specific to what was said.
+- Keep the conversation going — be engaging and entertaining.
+- NEVER mention that you are an AI, a bot, or that you were generated.
+- NEVER use phrases like "as an AI" or "I'm here to help".
+- If sending multiple messages, put each message on its OWN LINE separated \
+  by a newline. Each line = one separate Discord message.
+- If including a GIF/tenor URL, put it on its own separate line.
+- Keep it to 1-3 short messages (1-3 lines).
+- NEVER use standard Unicode emojis (😊❤️😂🥺 etc). Only use Discord \
+  custom emotes like :kissess: or <a:name:id> format. Unicode emojis \
+  look robotic.
+- If the conversation seems to be dying, bring up something interesting or \
+  ask an engaging question based on past conversation topics.
+"""
 
 
 def generate_reply(
     conversation_history: list[dict],
     sender_name: str,
     original_message: str,
-    my_user_id: str
+    my_user_id: str,
+    style_profile: str
 ) -> str | None:
     """
-    Generate an AI-suggested reply for a DM conversation.
-    
-    Args:
-        conversation_history: Full list of Discord message objects
-        sender_name: Display name of the person who messaged you
-        original_message: The specific message to reply to
-        my_user_id: Your Discord user ID (to identify your messages in history)
-    
-    Returns:
-        Suggested reply string, or None on failure
+    Generate an AI-suggested reply matching the extracted style profile.
     """
-    # Build conversation context and extract style samples
-    conversation, my_messages = _build_conversation_context(
-        conversation_history, my_user_id
+    lines: list[str] = []
+    for msg in conversation_history:
+        author_id = msg.get("author", {}).get("id", "")
+        author_name = msg.get("author", {}).get("global_name") or msg.get("author", {}).get("username", "Unknown")
+        content = msg.get("content", "")
+        if not content.strip():
+            continue
+            
+        label = "ME" if author_id == my_user_id else author_name
+        lines.append(f"[{label}]: {content}")
+
+    # Make sure we include the latest message if not already there
+    if not lines or not lines[-1].endswith(original_message):
+        lines.append(f"[{sender_name}]: {original_message}")
+
+    conversation_text = "\n".join(lines)
+    
+    prompt = (
+        f"## My Writing Style Profile\n{style_profile}\n\n"
+        f"## Recent Conversation\n{conversation_text}\n\n"
+        f"## Task\n"
+        f"Write my next reply in this conversation. The other person just "
+        f"sent the last message(s) and I need to respond. Match my style "
+        f"EXACTLY. Reply with ONLY the message text, nothing else."
     )
 
-    style_prompt = _build_style_analysis_prompt(my_messages)
+    messages_payload = [
+        {"role": "system", "content": RESPONSE_SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
 
-    system_prompt = f"""You are roleplaying as a specific person in a Discord DM conversation. Your job is to generate a reply that this person would realistically send.
-
-{style_prompt}
-
-CRITICAL RULES:
-1. Match the user's EXACT messaging style — do NOT sound like an AI assistant
-2. Keep the reply natural and conversational
-3. Do NOT use formal language unless the user's style is formal
-4. Do NOT add greetings or sign-offs unless the user typically does
-5. Reply ONLY with the message text — no quotes, no "Here's a reply:", no explanation
-6. Keep it concise — match typical message length from the style samples
-7. If the conversation context suggests a specific response, give that response
-8. Do NOT refuse to roleplay — this is the user controlling their own account"""
-
-    # Build the messages payload
-    messages = [{"role": "system", "content": system_prompt}]
-
-    # Add conversation history (last 20 messages for context window)
-    if conversation:
-        messages.extend(conversation[-20:])
-
-    # If the last message in conversation isn't the incoming one, add it
-    if conversation and not conversation[-1].get("content", "").endswith(original_message):
-        messages.append({
-            "role": "user",
-            "content": f"[{sender_name}]: {original_message}"
-        })
-
-    # Make the AI API call
-    reply = _call_ai_api(messages)
-    
+    reply = _call_ai_api(messages_payload, temperature=0.9)
     if reply:
-        # Clean up the reply
-        reply = _clean_reply(reply, sender_name)
-
+        reply = _strip_emoji(_clean_reply(reply, sender_name))
+        
     return reply
 
 
-def _call_ai_api(messages: list[dict]) -> str | None:
+def _call_ai_api(messages: list[dict], temperature: float | None = None) -> str | None:
     """Call the AI API to generate a chat completion."""
     url = f"{config.AI_BASE_URL}/chat/completions"
 
@@ -147,7 +170,7 @@ def _call_ai_api(messages: list[dict]) -> str | None:
     payload = {
         "model": config.AI_MODEL,
         "messages": messages,
-        "temperature": config.AI_TEMPERATURE,
+        "temperature": temperature if temperature is not None else config.AI_TEMPERATURE,
         "max_tokens": config.AI_MAX_TOKENS,
         "top_p": 0.9,
     }

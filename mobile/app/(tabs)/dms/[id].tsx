@@ -15,9 +15,11 @@ export default function ChatScreen() {
   const navigation = useNavigation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { queue, onRefresh } = useQueue();
+  const { queue, channels, onRefresh } = useQueue();
   
-  const item = queue?.pending?.find(p => p.id === id);
+  // The route ID is now the channel ID
+  const channel = channels?.find(c => c.channel_id === id);
+  const item = queue?.pending?.find(p => p.channel_id === id);
   
   const [editedReply, setEditedReply] = useState(item?.suggested_reply || '');
   const [useReplyFeature, setUseReplyFeature] = useState(true);
@@ -25,19 +27,35 @@ export default function ChatScreen() {
   const [isGeneratingTarget, setIsGeneratingTarget] = useState<string | null>(null);
 
   useEffect(() => {
+    const title = item?.sender_name || channel?.sender_name || 'Chat';
+    navigation.setOptions({ 
+      headerTitle: title,
+    });
     if (item) {
-      navigation.setOptions({ 
-        headerTitle: item.sender_name,
-        // Optional: Custom header left or right
-      });
       setEditedReply(item.suggested_reply);
     }
-  }, [item, navigation]);
+  }, [item, channel, navigation]);
+
+  if (!item && channel) {
+    return (
+      <View style={styles.centerContainer}>
+        {channel.sender_avatar ? (
+          <Image source={{ uri: channel.sender_avatar }} style={[styles.introAvatar, { width: 64, height: 64, borderRadius: 32 }]} />
+        ) : (
+          <View style={[styles.introAvatar, styles.avatarFallback, { width: 64, height: 64, borderRadius: 32 }]}>
+            <Text style={styles.avatarFallbackText}>{channel.sender_name.charAt(0).toUpperCase()}</Text>
+          </View>
+        )}
+        <Text style={[styles.introTitle, { fontSize: 20 }]}>{channel.sender_name}</Text>
+        <Text style={{ color: palette.text.tertiary, marginTop: 8 }}>No pending replies.</Text>
+      </View>
+    );
+  }
 
   if (!item) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={{ color: palette.text.tertiary }}>Conversation not found or already handled.</Text>
+        <Text style={{ color: palette.text.tertiary }}>Conversation not found.</Text>
       </View>
     );
   }

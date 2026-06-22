@@ -2,6 +2,14 @@
  * Type definitions for the Gist-based queue system.
  */
 
+export interface Channel {
+  channel_id: string;
+  sender_name: string;
+  sender_id: string;
+  sender_avatar: string;
+  last_message_id: string;
+}
+
 export interface QueueItem {
   id: string;
   channel_id: string;

@@ -22,23 +22,26 @@ import gist_store
 import ai_responder
 
 
-def step_1_check_new_messages(state: dict) -> list[dict]:
+def step_1_check_new_messages(state: dict) -> tuple[list[dict], list[dict]]:
     """
     Check all DM channels for new messages since last run.
     
     Returns:
-        List of new message items with channel + sender context
+        Tuple of (new_items, channels_list):
+        - new_items: List of new message items with channel + sender context
+        - channels_list: List of all open DM channels for mobile app sidebar
     """
     print("\n" + "=" * 60)
     print("📥 Step 1: Checking for new DM messages...")
     print("=" * 60)
 
     new_items = []
+    channels_list = []
     channels = discord_client.get_dm_channels()
 
     if not channels:
         print("   No DM channels found.")
-        return new_items
+        return new_items, channels_list
 
     last_checked = state.get("last_checked", {})
     processed_ids = set(state.get("processed_message_ids", []))
@@ -52,6 +55,16 @@ def step_1_check_new_messages(state: dict) -> list[dict]:
 
         sender_name = recipient.get("global_name") or recipient.get("username", "Unknown")
         sender_id = recipient.get("id", "")
+        sender_avatar = discord_client.format_avatar_url(recipient)
+
+        # Build channel entry for mobile app sidebar
+        channels_list.append({
+            "channel_id": channel_id,
+            "sender_name": sender_name,
+            "sender_id": sender_id,
+            "sender_avatar": sender_avatar,
+            "last_message_id": channel.get("last_message_id", ""),
+        })
 
         # Get messages after the last-checked message ID for this channel
         after_id = last_checked.get(channel_id)
@@ -77,7 +90,7 @@ def step_1_check_new_messages(state: dict) -> list[dict]:
                     "message_id": msg["id"],
                     "sender_name": sender_name,
                     "sender_id": sender_id,
-                    "sender_avatar": discord_client.format_avatar_url(recipient),
+                    "sender_avatar": sender_avatar,
                     "content": msg.get("content", ""),
                     "timestamp": msg.get("timestamp", ""),
                 })
@@ -97,7 +110,7 @@ def step_1_check_new_messages(state: dict) -> list[dict]:
     state["processed_message_ids"] = list(processed_ids)[-500:]
 
     print(f"\n   📊 Total new messages: {len(new_items)}")
-    return new_items
+    return new_items, channels_list
 
 
 def step_2_generate_suggestions(new_items: list[dict], queue: dict) -> dict:
@@ -388,9 +401,11 @@ def run_pipeline(workflow_start_time_iso: str = None):
         state["workflow_start_time"] = workflow_start_time_iso
     state["last_ping_time"] = datetime.now(timezone.utc).isoformat()
 
+    channels_list = []
+
     try:
         # Step 1: Check for new messages
-        new_items = step_1_check_new_messages(state)
+        new_items, channels_list = step_1_check_new_messages(state)
 
         # Step 2: Generate AI suggestions for new messages
         queue = step_2_generate_suggestions(new_items, queue)
@@ -420,7 +435,7 @@ def run_pipeline(workflow_start_time_iso: str = None):
     print("💾 Saving state and queue to Gist...")
     print("=" * 60)
 
-    if gist_store.save_all(state, queue):
+    if gist_store.save_all(state, queue, channels_list):
         print("   ✅ State and Queue saved")
     else:
         print("   ❌ Failed to save State and Queue")

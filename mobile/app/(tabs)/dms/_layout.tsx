@@ -6,42 +6,62 @@ import { useFocusEffect, useRouter, usePathname } from 'expo-router';
 import { useState, useCallback, createContext, useContext } from 'react';
 
 import { palette } from '@/constants/Colors';
-import { fetchQueue, fetchState } from '@/services/gistService';
-import type { Queue, QueueItem, AppState } from '@/types/queue';
+import { fetchQueue, fetchState, fetchChannels } from '@/services/gistService';
+import type { Queue, QueueItem, AppState, Channel } from '@/types/queue';
 
 // Provide queue data to child screens
 export const QueueContext = createContext<{
   queue: Queue | null;
   appState: AppState | null;
+  channels: Channel[] | null;
   isLoading: boolean;
   refreshing: boolean;
   onRefresh: () => void;
-}>({ queue: null, appState: null, isLoading: true, refreshing: false, onRefresh: () => {} });
+}>({ queue: null, appState: null, channels: null, isLoading: true, refreshing: false, onRefresh: () => {} });
 
 export function useQueue() {
   return useContext(QueueContext);
 }
 
 function CustomDrawerContent(props: any) {
-  const { queue, appState, refreshing, onRefresh } = useQueue();
+  const { queue, appState, channels, refreshing, onRefresh } = useQueue();
   const router = useRouter();
   const pathname = usePathname();
 
   // Get unique senders from pending replies
   const pendingItems = queue?.pending || [];
   
-  // Group by channel_id and count pending messages
-  const convMap = new Map<string, { item: QueueItem; count: number }>();
+  // Count pending items per channel
+  const pendingMap = new Map<string, number>();
   pendingItems.forEach(curr => {
-    if (convMap.has(curr.channel_id)) {
-      convMap.get(curr.channel_id)!.count++;
-    } else {
-      convMap.set(curr.channel_id, { item: curr, count: 1 });
-    }
+    pendingMap.set(curr.channel_id, (pendingMap.get(curr.channel_id) || 0) + 1);
   });
 
-  const uniqueConversations = Array.from(convMap.values())
-    .sort((a, b) => new Date(b.item.created_at).getTime() - new Date(a.item.created_at).getTime());
+  // Build unified channel list
+  let displayChannels: { id: string; name: string; avatar: string; pendingCount: number }[] = [];
+
+  if (channels && channels.length > 0) {
+    displayChannels = channels.map(ch => ({
+      id: ch.channel_id,
+      name: ch.sender_name,
+      avatar: ch.sender_avatar,
+      pendingCount: pendingMap.get(ch.channel_id) || 0
+    }));
+  } else {
+    // Fallback: extract from pending items
+    const convMap = new Map<string, any>();
+    pendingItems.forEach(curr => {
+      if (!convMap.has(curr.channel_id)) {
+        convMap.set(curr.channel_id, {
+          id: curr.channel_id,
+          name: curr.sender_name,
+          avatar: curr.sender_avatar,
+          pendingCount: pendingMap.get(curr.channel_id) || 0
+        });
+      }
+    });
+    displayChannels = Array.from(convMap.values());
+  }
 
   // Determine workflow status
   let isWorkflowRunning = false;
@@ -74,41 +94,41 @@ function CustomDrawerContent(props: any) {
     >
       <Text style={styles.drawerTitle}>DIRECT MESSAGES</Text>
       
-      {uniqueConversations.length === 0 && !refreshing && (
+      {displayChannels.length === 0 && !refreshing && (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No pending replies.</Text>
+          <Text style={styles.emptyText}>No DMs available.</Text>
         </View>
       )}
 
-      {uniqueConversations.map(({ item, count }) => {
-        const isActive = pathname === `/dms/${item.id}`;
+      {displayChannels.map((ch) => {
+        const isActive = pathname === `/dms/${ch.id}`;
         
         return (
           <Pressable
-            key={item.id}
+            key={ch.id}
             style={[styles.friendItem, isActive && styles.friendItemActive]}
             onPress={() => {
-              router.push(`/(tabs)/dms/${item.id}` as any);
+              router.push(`/(tabs)/dms/${ch.id}` as any);
               props.navigation.closeDrawer();
             }}
           >
             <View style={styles.avatarContainer}>
-              {item.sender_avatar ? (
-                <Image source={{ uri: item.sender_avatar }} style={styles.avatar} />
+              {ch.avatar ? (
+                <Image source={{ uri: ch.avatar }} style={styles.avatar} />
               ) : (
                 <View style={[styles.avatar, styles.avatarFallback]}>
                   <Text style={styles.avatarFallbackText}>
-                    {item.sender_name.charAt(0).toUpperCase()}
+                    {ch.name.charAt(0).toUpperCase()}
                   </Text>
                 </View>
               )}
             </View>
             <Text style={[styles.friendName, isActive && styles.friendNameActive]} numberOfLines={1}>
-              {item.sender_name}
+              {ch.name}
             </Text>
-            {count > 0 && (
+            {ch.pendingCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+                <Text style={styles.badgeText}>{ch.pendingCount > 99 ? '99+' : ch.pendingCount}</Text>
               </View>
             )}
           </Pressable>
@@ -134,6 +154,7 @@ function CustomDrawerContent(props: any) {
 export default function DMLayout() {
   const [queue, setQueue] = useState<Queue | null>(null);
   const [appState, setAppState] = useState<AppState | null>(null);
+  const [channels, setChannels] = useState<Channel[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,9 +163,10 @@ export default function DMLayout() {
     if (isRefresh) setRefreshing(true);
     else setIsLoading(true);
     try {
-      const [queueData, stateData] = await Promise.all([fetchQueue(), fetchState()]);
+      const [queueData, stateData, channelsData] = await Promise.all([fetchQueue(), fetchState(), fetchChannels()]);
       setQueue(queueData);
       setAppState(stateData);
+      setChannels(channelsData);
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -162,7 +184,7 @@ export default function DMLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueueContext.Provider value={{ queue, appState, isLoading, refreshing, onRefresh: () => loadData(true) }}>
+      <QueueContext.Provider value={{ queue, appState, channels, isLoading, refreshing, onRefresh: () => loadData(true) }}>
         <Drawer
           drawerContent={(props) => <CustomDrawerContent {...props} />}
           screenOptions={{

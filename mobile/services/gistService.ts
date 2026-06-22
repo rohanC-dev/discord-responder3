@@ -179,6 +179,23 @@ export async function fetchState(): Promise<AppState | null> {
   }
 }
 
+export async function fetchChannels(): Promise<import('@/types/queue').Channel[] | null> {
+  const creds = await getCredentials();
+  if (!creds) return null;
+
+  const gist = await fetchGist(creds.gistId, creds.ghPat);
+  if (!gist) return null;
+
+  const channelsFile = gist.files['channels.json'];
+  if (!channelsFile) return null;
+
+  try {
+    return JSON.parse(channelsFile.content) as import('@/types/queue').Channel[];
+  } catch {
+    return null;
+  }
+}
+
 export async function approveReply(itemId: string, finalReply?: string, replyToMessageId?: string | null): Promise<boolean> {
   const creds = await getCredentials();
   if (!creds) return false;

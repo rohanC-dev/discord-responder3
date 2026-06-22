@@ -173,8 +173,8 @@ def get_state() -> dict:
     """Read the bot state from Gist."""
     return read_gist("state.json")
 
-def save_all(state: dict, queue: dict) -> bool:
-    """Write both state and queue to Gist in a single API call to avoid rate limits."""
+def save_all(state: dict, queue: dict, channels: list = None) -> bool:
+    """Write state, queue, and optionally channels to Gist in a single API call."""
     from datetime import datetime, timezone
     
     state["last_run"] = datetime.now(timezone.utc).isoformat()
@@ -182,12 +182,15 @@ def save_all(state: dict, queue: dict) -> bool:
     queue["last_updated"] = datetime.now(timezone.utc).isoformat()
     
     url = f"{GIST_API_BASE}/gists/{config.GIST_ID}"
-    payload = {
-        "files": {
-            "state.json": {"content": json.dumps(state, indent=2, default=str)},
-            "queue.json": {"content": json.dumps(queue, indent=2, default=str)}
-        }
+    files = {
+        "state.json": {"content": json.dumps(state, indent=2, default=str)},
+        "queue.json": {"content": json.dumps(queue, indent=2, default=str)},
     }
+    
+    if channels is not None:
+        files["channels.json"] = {"content": json.dumps(channels, indent=2, default=str)}
+    
+    payload = {"files": files}
     
     for attempt in range(3):
         try:

@@ -197,7 +197,7 @@ def trigger_typing(channel_id: str) -> None:
         pass
 
 
-def send_message(channel_id: str, content: str) -> dict | None:
+def send_message(channel_id: str, content: str, reply_to_message_id: str | None = None) -> dict | None:
     """
     Send a message naturally — splits on newlines, types before each part.
     This simulates human behavior to avoid anti-spam bans.
@@ -226,10 +226,14 @@ def send_message(channel_id: str, content: str) -> dict | None:
         print(" " * 40, end="\r") # clear the line
         
         # Send this part
+        payload = {"content": line}
+        if i == 0 and reply_to_message_id:
+            payload["message_reference"] = {"message_id": reply_to_message_id}
+            
         response = _api_request(
             "POST",
             f"/channels/{channel_id}/messages",
-            json={"content": line}
+            json=payload
         )
 
         if response is None:

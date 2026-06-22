@@ -69,7 +69,7 @@ DISCORD_API_BASE = "https://discord.com/api/v10"
 # =============================================================================
 # Polling & Timing
 # =============================================================================
-CHECK_INTERVAL = _get_int("CHECK_INTERVAL", 60)
+CHECK_INTERVAL = _get_int("CHECK_INTERVAL", 5)
 AUTO_REPLY_DELAY_MIN = _get_int("AUTO_REPLY_DELAY_MIN", 30)
 AUTO_REPLY_DELAY_MAX = _get_int("AUTO_REPLY_DELAY_MAX", 120)
 MAX_HISTORY_MESSAGES = _get_int("MAX_HISTORY_MESSAGES", 100)

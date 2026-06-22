@@ -5,6 +5,7 @@
 export interface QueueItem {
   id: string;
   channel_id: string;
+  message_id: string;
   sender_name: string;
   sender_id: string;
   sender_avatar: string;
@@ -16,6 +17,7 @@ export interface QueueItem {
   updated_at: string;
   // Added by mobile app when approving
   final_reply?: string;
+  reply_to_message_id?: string | null;
   approved_at?: string;
   // Added when sent
   sent_at?: string;
@@ -28,6 +30,7 @@ export interface Queue {
   approved: QueueItem[];
   sent: QueueItem[];
   skipped: QueueItem[];
+  generation_requests?: any[];
   last_updated: string;
 }
 

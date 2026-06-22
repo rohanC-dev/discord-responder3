@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Image, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Switch } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { palette } from '@/constants/Colors';
 import { useQueue } from './_layout';
 import { approveReply, skipReply } from '@/services/gistService';
+import { requestBackendGeneration } from '@/services/aiService';
 import type { Queue, QueueItem } from '@/types/queue';
 
 export default function ChatScreen() {
@@ -17,7 +18,9 @@ export default function ChatScreen() {
   const item = queue?.pending?.find(p => p.id === id);
   
   const [editedReply, setEditedReply] = useState(item?.suggested_reply || '');
+  const [useReplyFeature, setUseReplyFeature] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGeneratingTarget, setIsGeneratingTarget] = useState<string | null>(null);
 
   useEffect(() => {
     if (item) {
@@ -42,7 +45,8 @@ export default function ChatScreen() {
     setIsSubmitting(true);
     try {
       if (action === 'approve') {
-        await approveReply(item.id, editedReply);
+        const replyToMessageId = useReplyFeature ? item.message_id : null;
+        await approveReply(item.id, editedReply, replyToMessageId);
       } else {
         await skipReply(item.id);
       }
@@ -52,6 +56,27 @@ export default function ChatScreen() {
       Alert.alert('Error', err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGenerateReply = async (targetMessage: string) => {
+    if (!item) return;
+    setIsGeneratingTarget(targetMessage);
+    try {
+      const ctx = item.conversation_context || [];
+      const generated = await requestBackendGeneration(
+        item.channel_id,
+        targetMessage,
+        item.sender_name,
+        ctx
+      );
+      if (generated) {
+        setEditedReply(generated);
+      }
+    } catch (err: any) {
+      Alert.alert('Generation Error', err.message);
+    } finally {
+      setIsGeneratingTarget(null);
     }
   };
 
@@ -99,7 +124,22 @@ export default function ChatScreen() {
                   </View>
               )}
               <View style={styles.messageContent}>
-                <Text style={styles.messageSender}>{sender}</Text>
+                <View style={styles.messageHeader}>
+                  <Text style={styles.messageSender}>{sender}</Text>
+                  {!isMe && (
+                    <Pressable 
+                      style={({pressed}) => [styles.generateButton, pressed && styles.generateButtonPressed]}
+                      onPress={() => handleGenerateReply(content)}
+                      disabled={!!isGeneratingTarget}
+                    >
+                      {isGeneratingTarget === content ? (
+                        <ActivityIndicator size="small" color={palette.brand.primary} />
+                      ) : (
+                        <Ionicons name="sparkles" size={14} color={palette.brand.primary} />
+                      )}
+                    </Pressable>
+                  )}
+                </View>
                 <Text style={styles.messageText}>{content}</Text>
               </View>
             </View>
@@ -113,7 +153,20 @@ export default function ChatScreen() {
             <View style={[styles.messageAvatar, styles.avatarFallbackSmall]}><Text style={styles.avatarFallbackTextSmall}>{item.sender_name.charAt(0).toUpperCase()}</Text></View>
           }
           <View style={styles.messageContent}>
-            <Text style={styles.messageSender}>{item.sender_name}</Text>
+            <View style={styles.messageHeader}>
+              <Text style={styles.messageSender}>{item.sender_name}</Text>
+              <Pressable 
+                style={({pressed}) => [styles.generateButton, pressed && styles.generateButtonPressed]}
+                onPress={() => handleGenerateReply(item.original_message)}
+                disabled={!!isGeneratingTarget}
+              >
+                {isGeneratingTarget === item.original_message ? (
+                  <ActivityIndicator size="small" color={palette.brand.primary} />
+                ) : (
+                  <Ionicons name="sparkles" size={14} color={palette.brand.primary} />
+                )}
+              </Pressable>
+            </View>
             <Text style={styles.messageText}>{item.original_message}</Text>
           </View>
         </View>
@@ -121,6 +174,16 @@ export default function ChatScreen() {
 
       {/* Input Area */}
       <View style={styles.inputArea}>
+        <View style={styles.replyOptionsContainer}>
+          <Text style={styles.replyOptionsText}>Reply to original message</Text>
+          <Switch
+            value={useReplyFeature}
+            onValueChange={setUseReplyFeature}
+            trackColor={{ false: palette.dark.border, true: palette.brand.primary }}
+            thumbColor={'#fff'}
+            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+          />
+        </View>
         <View style={styles.inputContainer}>
           <Pressable 
             style={styles.actionButton} 
@@ -233,11 +296,24 @@ const styles = StyleSheet.create({
   messageContent: {
     flex: 1,
   },
+  messageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  generateButton: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: palette.brand.primary + '15',
+  },
+  generateButtonPressed: {
+    opacity: 0.6,
+  },
   messageSender: {
     color: palette.text.primary,
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 4,
+    fontWeight: '700',
+    fontSize: 15,
   },
   messageText: {
     color: palette.text.secondary,
@@ -250,6 +326,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: palette.dark.border,
+  },
+  replyOptionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  replyOptionsText: {
+    color: palette.text.secondary,
+    fontSize: 14,
+    marginRight: 8,
   },
   inputContainer: {
     flexDirection: 'row',

@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Alert, Pressable } from 'react-native';
 import { palette } from '@/constants/Colors';
 import { useQueue } from './_layout';
 import ReplyCard from '@/components/ReplyCard';
-import { approveReply, skipReply } from '@/services/gistService';
+import { approveReply, skipReply, clearAllPendingReplies } from '@/services/gistService';
 
 export default function DMIndexScreen() {
   const { queue, isLoading, onRefresh } = useQueue();
@@ -23,6 +23,28 @@ export default function DMIndexScreen() {
     } catch (err: any) {
       Alert.alert('Error', err.message);
     }
+  };
+
+  const handleClearAll = () => {
+    Alert.alert(
+      "Clear All Suggestions",
+      "Are you sure you want to dismiss all pending AI suggestions? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear All", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await clearAllPendingReplies();
+              onRefresh();
+            } catch (err: any) {
+              Alert.alert('Error', err.message);
+            }
+          }
+        }
+      ]
+    );
   };
 
   if (isLoading) {
@@ -54,7 +76,14 @@ export default function DMIndexScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.title}>Pending Suggestions</Text>
+            <View style={styles.headerTopRow}>
+              <Text style={styles.title}>Pending Suggestions</Text>
+              {pendingCount > 0 && (
+                <Pressable style={styles.clearAllButton} onPress={handleClearAll}>
+                  <Text style={styles.clearAllText}>Clear All</Text>
+                </Pressable>
+              )}
+            </View>
             <Text style={styles.subtitle}>
               {pendingCount} message{pendingCount !== 1 ? 's' : ''} waiting for your review.
             </Text>
@@ -96,11 +125,27 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 4,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  clearAllButton: {
+    backgroundColor: palette.dark.surfaceLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  clearAllText: {
+    color: palette.brand.error,
+    fontSize: 14,
+    fontWeight: '500',
+  },
   title: {
     color: palette.text.primary,
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 4,
   },
   subtitle: {
     color: palette.text.secondary,

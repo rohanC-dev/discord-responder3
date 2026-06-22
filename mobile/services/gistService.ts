@@ -10,6 +10,10 @@ const GIST_API = 'https://api.github.com';
 const GIST_ID_KEY = 'gist_id';
 const GH_PAT_KEY = 'gh_pat';
 
+const AI_API_KEY_KEY = 'ai_api_key';
+const AI_BASE_URL_KEY = 'ai_base_url';
+const AI_MODEL_KEY = 'ai_model';
+
 // ─────────────────────────────────────────────────────────────
 // Credential management
 // ─────────────────────────────────────────────────────────────
@@ -35,6 +39,36 @@ export async function saveCredentials(gistId: string, ghPat: string): Promise<vo
 export async function clearCredentials(): Promise<void> {
   await SecureStore.deleteItemAsync(GIST_ID_KEY);
   await SecureStore.deleteItemAsync(GH_PAT_KEY);
+}
+
+export async function getAiCredentials(): Promise<{ apiKey: string; baseUrl: string; model: string } | null> {
+  try {
+    const apiKey = await SecureStore.getItemAsync(AI_API_KEY_KEY);
+    const baseUrl = await SecureStore.getItemAsync(AI_BASE_URL_KEY);
+    const model = await SecureStore.getItemAsync(AI_MODEL_KEY);
+    if (apiKey) {
+      return { 
+        apiKey, 
+        baseUrl: baseUrl || 'https://openrouter.ai/api/v1', 
+        model: model || 'meta-llama/llama-3.1-8b-instruct' 
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveAiCredentials(apiKey: string, baseUrl: string, model: string): Promise<void> {
+  await SecureStore.setItemAsync(AI_API_KEY_KEY, apiKey);
+  await SecureStore.setItemAsync(AI_BASE_URL_KEY, baseUrl);
+  await SecureStore.setItemAsync(AI_MODEL_KEY, model);
+}
+
+export async function clearAiCredentials(): Promise<void> {
+  await SecureStore.deleteItemAsync(AI_API_KEY_KEY);
+  await SecureStore.deleteItemAsync(AI_BASE_URL_KEY);
+  await SecureStore.deleteItemAsync(AI_MODEL_KEY);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -102,6 +136,7 @@ function defaultQueue(): Queue {
     approved: [],
     sent: [],
     skipped: [],
+    generation_requests: [],
     last_updated: '',
   };
 }
@@ -144,7 +179,7 @@ export async function fetchState(): Promise<AppState | null> {
   }
 }
 
-export async function approveReply(itemId: string, finalReply?: string): Promise<boolean> {
+export async function approveReply(itemId: string, finalReply?: string, replyToMessageId?: string | null): Promise<boolean> {
   const creds = await getCredentials();
   if (!creds) return false;
 
@@ -159,6 +194,7 @@ export async function approveReply(itemId: string, finalReply?: string): Promise
     ...item,
     status: 'approved',
     final_reply: finalReply || item.suggested_reply,
+    reply_to_message_id: replyToMessageId,
     approved_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -193,6 +229,32 @@ export async function skipReply(itemId: string): Promise<boolean> {
   queue.pending.splice(itemIndex, 1);
   queue.skipped.push(skippedItem);
   queue.last_updated = new Date().toISOString();
+
+  return updateGist(creds.gistId, creds.ghPat, 'queue.json', queue);
+}
+
+export async function clearAllPendingReplies(): Promise<boolean> {
+  const creds = await getCredentials();
+  if (!creds) return false;
+
+  const queue = await fetchQueue();
+  if (!queue) return false;
+
+  if (queue.pending.length === 0) return true;
+
+  // Move all pending items to skipped
+  const now = new Date().toISOString();
+  for (const item of queue.pending) {
+    queue.skipped.push({
+      ...item,
+      status: 'skipped',
+      skipped_reason: 'cleared_all',
+      updated_at: now,
+    });
+  }
+  
+  queue.pending = [];
+  queue.last_updated = now;
 
   return updateGist(creds.gistId, creds.ghPat, 'queue.json', queue);
 }

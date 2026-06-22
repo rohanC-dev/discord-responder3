@@ -170,6 +170,7 @@ def step_2_generate_suggestions(new_items: list[dict], queue: dict) -> dict:
             suggestion = {
                 "id": str(uuid.uuid4()),
                 "channel_id": channel_id,
+                "message_id": latest["id"],
                 "sender_name": sender_name,
                 "sender_id": latest["sender_id"],
                 "sender_avatar": latest["sender_avatar"],
@@ -231,7 +232,8 @@ def step_3_send_approved(queue: dict) -> dict:
         time.sleep(actual_delay)
 
         # Send the message
-        result = discord_client.send_message(channel_id, reply_text)
+        reply_to_id = item.get("reply_to_message_id")
+        result = discord_client.send_message(channel_id, reply_text, reply_to_message_id=reply_to_id)
 
         if result:
             queue = gist_store.mark_as_sent(queue, item_id, channel_id)
@@ -260,6 +262,66 @@ def step_4_cleanup(queue: dict) -> dict:
     skipped = len(queue.get("skipped", []))
 
     print(f"   📊 Queue: {pending} pending, {approved} approved, {sent} sent, {skipped} skipped")
+    return queue
+
+
+def step_5_process_generation_requests(queue: dict) -> dict:
+    """
+    Process on-demand generation requests from the mobile app.
+    The mobile app writes a request to queue.generation_requests,
+    and this step picks it up, generates a reply, and writes the result back.
+    """
+    requests_list = queue.get("generation_requests", [])
+    pending_requests = [r for r in requests_list if r.get("status") == "pending"]
+
+    if not pending_requests:
+        return queue
+
+    print("\n" + "=" * 60)
+    print(f"✨ Step 5: Processing {len(pending_requests)} generation request(s)...")
+    print("=" * 60)
+
+    for req in pending_requests:
+        channel_id = req.get("channel_id")
+        target_message = req.get("target_message", "")
+        sender_name = req.get("sender_name", "Unknown")
+        req_id = req.get("id")
+
+        print(f"\n   🔄 Generating reply for request {req_id[:8]}...")
+        print(f"      Target: {target_message[:80]}...")
+
+        try:
+            # Get conversation history from Discord
+            history = discord_client.get_conversation_history(channel_id, limit=50)
+
+            # Step A: Analyze style
+            print(f"      🔍 Analyzing writing style...")
+            style_profile = ai_responder.analyze_style(history, config.NOTIFY_USER_ID)
+
+            # Step B: Generate reply targeting the specific message
+            generated = ai_responder.generate_reply(
+                conversation_history=history,
+                sender_name=sender_name,
+                original_message=target_message,
+                my_user_id=config.NOTIFY_USER_ID,
+                style_profile=style_profile
+            )
+
+            if generated:
+                req["status"] = "completed"
+                req["result"] = generated
+                req["completed_at"] = datetime.now(timezone.utc).isoformat()
+                print(f"      ✅ Generated: {generated[:80]}...")
+            else:
+                req["status"] = "failed"
+                req["error"] = "AI returned empty response"
+                print(f"      ❌ AI returned empty response")
+
+        except Exception as e:
+            req["status"] = "failed"
+            req["error"] = str(e)
+            print(f"      ❌ Error: {e}")
+
     return queue
 
 
@@ -300,6 +362,9 @@ def run_pipeline(workflow_start_time_iso: str = None):
 
         # Step 4: Clean up expired suggestions
         queue = step_4_cleanup(queue)
+
+        # Step 5: Process on-demand generation requests from mobile app
+        queue = step_5_process_generation_requests(queue)
 
     except Exception as e:
         print(f"\n❌ Pipeline error: {e}")

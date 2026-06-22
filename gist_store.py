@@ -29,6 +29,7 @@ def _default_queue() -> dict:
         "approved": [],
         "sent": [],
         "skipped": [],
+        "generation_requests": [],
         "last_updated": ""
     }
 

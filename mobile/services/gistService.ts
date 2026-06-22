@@ -4,41 +4,80 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { Queue, QueueItem, AppState, GistResponse } from '@/types/queue';
 
 const GIST_API = 'https://api.github.com';
-const GIST_ID_KEY = 'gist_id';
-const GH_PAT_KEY = 'gh_pat';
+const GIST_ID_KEY = 'dm_responder_gist_id';
+const GH_PAT_KEY = 'dm_responder_gh_pat';
+const DISCORD_TOKEN_KEY = 'dm_responder_discord_token';
 
 const AI_API_KEY_KEY = 'ai_api_key';
 const AI_BASE_URL_KEY = 'ai_base_url';
 const AI_MODEL_KEY = 'ai_model';
 
+// Fallback to in-memory storage for web
+let webStorage: Record<string, string> = {};
+
 // ─────────────────────────────────────────────────────────────
 // Credential management
 // ─────────────────────────────────────────────────────────────
 
-export async function getCredentials(): Promise<{ gistId: string; ghPat: string } | null> {
+export async function getCredentials(): Promise<{gistId: string, ghPat: string, discordToken?: string} | null> {
   try {
-    const gistId = await SecureStore.getItemAsync(GIST_ID_KEY);
-    const ghPat = await SecureStore.getItemAsync(GH_PAT_KEY);
+    let gistId, ghPat, discordToken;
+    
+    if (Platform.OS === 'web') {
+      gistId = webStorage[GIST_ID_KEY];
+      ghPat = webStorage[GH_PAT_KEY];
+      discordToken = webStorage[DISCORD_TOKEN_KEY];
+    } else {
+      gistId = await SecureStore.getItemAsync(GIST_ID_KEY);
+      ghPat = await SecureStore.getItemAsync(GH_PAT_KEY);
+      discordToken = await SecureStore.getItemAsync(DISCORD_TOKEN_KEY);
+    }
+
+    // Fallback to environment variables if not set in storage
+    if (!gistId || !ghPat) {
+      gistId = process.env.EXPO_PUBLIC_GIST_ID || gistId;
+      ghPat = process.env.EXPO_PUBLIC_GH_PAT || ghPat;
+      discordToken = process.env.EXPO_PUBLIC_DISCORD_TOKEN || discordToken;
+    }
+    
     if (gistId && ghPat) {
-      return { gistId, ghPat };
+      return { gistId, ghPat, discordToken: discordToken || undefined };
     }
     return null;
-  } catch {
+  } catch (err) {
+    console.error("Error reading credentials", err);
     return null;
   }
 }
 
-export async function saveCredentials(gistId: string, ghPat: string): Promise<void> {
-  await SecureStore.setItemAsync(GIST_ID_KEY, gistId);
-  await SecureStore.setItemAsync(GH_PAT_KEY, ghPat);
+export async function saveCredentials(gistId: string, ghPat: string, discordToken?: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    webStorage[GIST_ID_KEY] = gistId;
+    webStorage[GH_PAT_KEY] = ghPat;
+    if (discordToken) webStorage[DISCORD_TOKEN_KEY] = discordToken;
+  } else {
+    await SecureStore.setItemAsync(GIST_ID_KEY, gistId);
+    await SecureStore.setItemAsync(GH_PAT_KEY, ghPat);
+    if (discordToken) {
+      await SecureStore.setItemAsync(DISCORD_TOKEN_KEY, discordToken);
+    } else {
+      await SecureStore.deleteItemAsync(DISCORD_TOKEN_KEY).catch(() => {});
+    }
+  }
 }
 
 export async function clearCredentials(): Promise<void> {
-  await SecureStore.deleteItemAsync(GIST_ID_KEY);
-  await SecureStore.deleteItemAsync(GH_PAT_KEY);
+  if (Platform.OS === 'web') {
+    webStorage = {};
+  } else {
+    await SecureStore.deleteItemAsync(GIST_ID_KEY);
+    await SecureStore.deleteItemAsync(GH_PAT_KEY);
+    await SecureStore.deleteItemAsync(DISCORD_TOKEN_KEY);
+  }
 }
 
 export async function getAiCredentials(): Promise<{ apiKey: string; baseUrl: string; model: string } | null> {

@@ -6,10 +6,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { palette } from '@/constants/Colors';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tabs
       screenOptions={{
@@ -19,9 +22,9 @@ export default function TabLayout() {
           backgroundColor: palette.dark.surface,
           borderTopColor: palette.dark.border,
           borderTopWidth: 1,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 8),
           paddingTop: 8,
-          height: Platform.OS === 'ios' ? 88 : 64,
+          height: 60 + Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 8),
         },
         tabBarLabelStyle: {
           fontSize: 11,

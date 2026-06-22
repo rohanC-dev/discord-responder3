@@ -28,6 +28,7 @@ import { AppState } from '@/types/queue';
 export default function SettingsScreen() {
   const [gistId, setGistId] = useState('');
   const [ghPat, setGhPat] = useState('');
+  const [discordToken, setDiscordToken] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isConnected, setIsConnected] = useState<boolean | null>(null);
@@ -44,6 +45,7 @@ export default function SettingsScreen() {
     if (creds) {
       setGistId(creds.gistId);
       setGhPat(creds.ghPat);
+      setDiscordToken(creds.discordToken || '');
       setIsConnected(true);
     }
   };
@@ -62,7 +64,7 @@ export default function SettingsScreen() {
     }
 
     setIsSaving(true);
-    await saveCredentials(gistId.trim(), ghPat.trim());
+    await saveCredentials(gistId.trim(), ghPat.trim(), discordToken.trim() || undefined);
     setIsSaving(false);
 
     // Auto-test connection
@@ -94,6 +96,7 @@ export default function SettingsScreen() {
             await clearCredentials();
             setGistId('');
             setGhPat('');
+            setDiscordToken('');
             setIsConnected(null);
             setConnectionMessage('');
             setAppState(null);
@@ -184,6 +187,23 @@ export default function SettingsScreen() {
         />
         <Text style={styles.inputHint}>
           Personal Access Token with 'gist' scope
+        </Text>
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Discord Token (Optional)</Text>
+        <TextInput
+          style={styles.input}
+          value={discordToken}
+          onChangeText={setDiscordToken}
+          placeholder="MTEzxxxxxxxxxxxx.xxxxx.xxxxxxxxx"
+          placeholderTextColor={palette.text.tertiary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+        />
+        <Text style={styles.inputHint}>
+          Used to read past messages directly from Discord.
         </Text>
       </View>
 

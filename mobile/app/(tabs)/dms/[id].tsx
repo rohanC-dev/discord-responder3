@@ -8,6 +8,7 @@ import { palette } from '@/constants/Colors';
 import { useQueue } from './_layout';
 import { approveReply, skipReply } from '@/services/gistService';
 import { requestBackendGeneration } from '@/services/aiService';
+import { fetchChannelMessages, sendDiscordMessage, DiscordMessage } from '@/services/discordService';
 import type { Queue, QueueItem } from '@/types/queue';
 
 export default function ChatScreen() {
@@ -17,7 +18,6 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { queue, channels, onRefresh } = useQueue();
   
-  // The route ID is now the channel ID
   const channel = channels?.find(c => c.channel_id === id);
   const item = queue?.pending?.find(p => p.channel_id === id);
   
@@ -26,33 +26,30 @@ export default function ChatScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingTarget, setIsGeneratingTarget] = useState<string | null>(null);
 
+  const [historyMessages, setHistoryMessages] = useState<DiscordMessage[] | null>(null);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+
+  // Derived properties for header and intro
+  const chanName = item?.sender_name || channel?.sender_name || 'Unknown';
+  const chanAvatar = item?.sender_avatar || channel?.sender_avatar;
+
   useEffect(() => {
-    const title = item?.sender_name || channel?.sender_name || 'Chat';
-    navigation.setOptions({ 
-      headerTitle: title,
-    });
+    navigation.setOptions({ headerTitle: chanName });
     if (item) {
       setEditedReply(item.suggested_reply);
     }
-  }, [item, channel, navigation]);
+  }, [item, chanName, navigation]);
 
-  if (!item && channel) {
-    return (
-      <View style={styles.centerContainer}>
-        {channel.sender_avatar ? (
-          <Image source={{ uri: channel.sender_avatar }} style={[styles.introAvatar, { width: 64, height: 64, borderRadius: 32 }]} />
-        ) : (
-          <View style={[styles.introAvatar, styles.avatarFallback, { width: 64, height: 64, borderRadius: 32 }]}>
-            <Text style={styles.avatarFallbackText}>{channel.sender_name.charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
-        <Text style={[styles.introTitle, { fontSize: 20 }]}>{channel.sender_name}</Text>
-        <Text style={{ color: palette.text.tertiary, marginTop: 8 }}>No pending replies.</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (!item && channel) {
+      setIsFetchingHistory(true);
+      fetchChannelMessages(channel.channel_id)
+        .then(msgs => setHistoryMessages(msgs))
+        .finally(() => setIsFetchingHistory(false));
+    }
+  }, [item, channel]);
 
-  if (!item) {
+  if (!item && !channel) {
     return (
       <View style={styles.centerContainer}>
         <Text style={{ color: palette.text.tertiary }}>Conversation not found.</Text>
@@ -61,17 +58,39 @@ export default function ChatScreen() {
   }
 
   const handleAction = async (action: 'approve' | 'skip') => {
-    if (!queue) return;
     setIsSubmitting(true);
     try {
-      if (action === 'approve') {
-        const replyToMessageId = useReplyFeature ? item.message_id : null;
-        await approveReply(item.id, editedReply, replyToMessageId);
-      } else {
-        await skipReply(item.id);
+      if (item) {
+        // We have a pending item in Gist queue, process normally
+        if (!queue) return;
+        if (action === 'approve') {
+          const replyToMessageId = useReplyFeature ? item.message_id : null;
+          await approveReply(item.id, editedReply, replyToMessageId);
+        } else {
+          await skipReply(item.id);
+        }
+        onRefresh();
+        router.replace('/(tabs)/dms' as any);
+      } else if (channel) {
+        // No item, so we are sending natively via Discord API
+        if (action === 'approve') {
+          if (!editedReply.trim()) return;
+          const success = await sendDiscordMessage(channel.channel_id, editedReply);
+          if (success) {
+            setEditedReply('');
+            // Refresh history
+            const msgs = await fetchChannelMessages(channel.channel_id);
+            if (msgs) setHistoryMessages(msgs);
+            Alert.alert('Sent', 'Message sent successfully!');
+          } else {
+            Alert.alert('Failed', 'Could not send message. Did you add your Discord Token in Settings?');
+          }
+        } else {
+          // 'skip' acts as a clear or back button here
+          setEditedReply('');
+          router.replace('/(tabs)/dms' as any);
+        }
       }
-      onRefresh(); // Trigger global refresh to update sidebar
-      router.replace('/(tabs)/dms' as any); // Go back to empty state
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
@@ -80,14 +99,25 @@ export default function ChatScreen() {
   };
 
   const handleGenerateReply = async (targetMessage: string) => {
-    if (!item) return;
+    const chanId = item?.channel_id || channel?.channel_id;
+    if (!chanId) return;
+    
     setIsGeneratingTarget(targetMessage);
     try {
-      const ctx = item.conversation_context || [];
+      let ctx: string[] = [];
+      if (item) {
+        ctx = item.conversation_context || [];
+      } else if (historyMessages) {
+        ctx = historyMessages.map(m => {
+           const isMe = m.author.id !== channel?.sender_id;
+           return `${isMe ? 'You' : chanName}: ${m.content}`;
+        });
+      }
+      
       const generated = await requestBackendGeneration(
-        item.channel_id,
+        chanId,
         targetMessage,
-        item.sender_name,
+        chanName,
         ctx
       );
       if (generated) {
@@ -109,23 +139,26 @@ export default function ChatScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Intro Section */}
         <View style={styles.introContainer}>
-          {item.sender_avatar ? (
-            <Image source={{ uri: item.sender_avatar }} style={styles.introAvatar} />
+          {chanAvatar ? (
+            <Image source={{ uri: chanAvatar }} style={styles.introAvatar} />
           ) : (
             <View style={[styles.introAvatar, styles.avatarFallback]}>
-              <Text style={styles.avatarFallbackText}>{item.sender_name.charAt(0).toUpperCase()}</Text>
+              <Text style={styles.avatarFallbackText}>{chanName.charAt(0).toUpperCase()}</Text>
             </View>
           )}
-          <Text style={styles.introTitle}>{item.sender_name}</Text>
-          <Text style={styles.introSubtitle}>This is the beginning of your direct message history with @{item.sender_name}.</Text>
+          <Text style={styles.introTitle}>{chanName}</Text>
+          <Text style={styles.introSubtitle}>This is the beginning of your direct message history with @{chanName}.</Text>
         </View>
 
         {/* Divider */}
         <View style={styles.divider} />
 
-        {/* Conversation Context */}
-        {item.conversation_context?.map((msg, index) => {
-          // Identify if the message is from the user
+        {isFetchingHistory && (
+          <ActivityIndicator size="large" color={palette.brand.primary} style={{ marginTop: 20 }} />
+        )}
+
+        {/* Conversation Context (From Queue Item) */}
+        {item && item.conversation_context?.map((msg, index) => {
           const isMe = msg.startsWith('You:') || msg.startsWith('Me:') || !msg.startsWith(`${item.sender_name}:`);
           const content = msg.split(': ').slice(1).join(': ') || msg;
           const sender = isMe ? 'You' : item.sender_name;
@@ -166,30 +199,74 @@ export default function ChatScreen() {
           );
         })}
 
-        {/* Original Message */}
-        <View style={styles.messageRow}>
-          {item.sender_avatar ? 
-            <Image source={{ uri: item.sender_avatar }} style={styles.messageAvatar} /> :
-            <View style={[styles.messageAvatar, styles.avatarFallbackSmall]}><Text style={styles.avatarFallbackTextSmall}>{item.sender_name.charAt(0).toUpperCase()}</Text></View>
-          }
-          <View style={styles.messageContent}>
-            <View style={styles.messageHeader}>
-              <Text style={styles.messageSender}>{item.sender_name}</Text>
-              <Pressable 
-                style={({pressed}) => [styles.generateButton, pressed && styles.generateButtonPressed]}
-                onPress={() => handleGenerateReply(item.original_message)}
-                disabled={!!isGeneratingTarget}
-              >
-                {isGeneratingTarget === item.original_message ? (
-                  <ActivityIndicator size="small" color={palette.brand.primary} />
-                ) : (
-                  <Ionicons name="sparkles" size={14} color={palette.brand.primary} />
-                )}
-              </Pressable>
+        {/* History Messages (When no Queue Item) */}
+        {!item && historyMessages?.map((msg) => {
+          const isMe = channel ? msg.author.id !== channel.sender_id : false;
+          const sender = isMe ? 'You' : chanName;
+          const content = msg.content;
+          
+          return (
+            <View key={`hist-${msg.id}`} style={styles.messageRow}>
+              {isMe ? (
+                <View style={[styles.messageAvatar, styles.avatarFallbackSmall, { backgroundColor: palette.brand.primary }]}>
+                  <Text style={styles.avatarFallbackTextSmall}>Me</Text>
+                </View>
+              ) : (
+                chanAvatar ? 
+                  <Image source={{ uri: chanAvatar }} style={styles.messageAvatar} /> :
+                  <View style={[styles.messageAvatar, styles.avatarFallbackSmall]}>
+                    <Text style={styles.avatarFallbackTextSmall}>{sender.charAt(0).toUpperCase()}</Text>
+                  </View>
+              )}
+              <View style={styles.messageContent}>
+                <View style={styles.messageHeader}>
+                  <Text style={styles.messageSender}>{sender}</Text>
+                  {!isMe && (
+                    <Pressable 
+                      style={({pressed}) => [styles.generateButton, pressed && styles.generateButtonPressed]}
+                      onPress={() => handleGenerateReply(content)}
+                      disabled={!!isGeneratingTarget}
+                    >
+                      {isGeneratingTarget === content ? (
+                        <ActivityIndicator size="small" color={palette.brand.primary} />
+                      ) : (
+                        <Ionicons name="sparkles" size={14} color={palette.brand.primary} />
+                      )}
+                    </Pressable>
+                  )}
+                </View>
+                <Text style={styles.messageText}>{content}</Text>
+              </View>
             </View>
-            <Text style={styles.messageText}>{item.original_message}</Text>
+          );
+        })}
+
+        {/* Original Message (Only when we have a pending item) */}
+        {item && (
+          <View style={styles.messageRow}>
+            {item.sender_avatar ? 
+              <Image source={{ uri: item.sender_avatar }} style={styles.messageAvatar} /> :
+              <View style={[styles.messageAvatar, styles.avatarFallbackSmall]}><Text style={styles.avatarFallbackTextSmall}>{item.sender_name.charAt(0).toUpperCase()}</Text></View>
+            }
+            <View style={styles.messageContent}>
+              <View style={styles.messageHeader}>
+                <Text style={styles.messageSender}>{item.sender_name}</Text>
+                <Pressable 
+                  style={({pressed}) => [styles.generateButton, pressed && styles.generateButtonPressed]}
+                  onPress={() => handleGenerateReply(item.original_message)}
+                  disabled={!!isGeneratingTarget}
+                >
+                  {isGeneratingTarget === item.original_message ? (
+                    <ActivityIndicator size="small" color={palette.brand.primary} />
+                  ) : (
+                    <Ionicons name="sparkles" size={14} color={palette.brand.primary} />
+                  )}
+                </Pressable>
+              </View>
+              <Text style={styles.messageText}>{item.original_message}</Text>
+            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
 
       {/* Input Area */}
@@ -210,7 +287,7 @@ export default function ChatScreen() {
             onPress={() => handleAction('skip')}
             disabled={isSubmitting}
           >
-            <Ionicons name="close-circle" size={24} color={palette.text.tertiary} />
+            <Ionicons name={item ? "close-circle" : "close"} size={24} color={palette.text.tertiary} />
           </Pressable>
           
           <TextInput
@@ -218,7 +295,7 @@ export default function ChatScreen() {
             value={editedReply}
             onChangeText={setEditedReply}
             multiline
-            placeholder="Message..."
+            placeholder={item ? "Message..." : "Send direct message..."}
             placeholderTextColor={palette.text.tertiary}
             editable={!isSubmitting}
           />

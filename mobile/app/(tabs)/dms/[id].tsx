@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Image, Activi
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useEffect } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { palette } from '@/constants/Colors';
 import { useQueue } from './_layout';
@@ -13,6 +14,7 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { queue, onRefresh } = useQueue();
   
   const item = queue?.pending?.find(p => p.id === id);
@@ -173,7 +175,7 @@ export default function ChatScreen() {
       </ScrollView>
 
       {/* Input Area */}
-      <View style={styles.inputArea}>
+      <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <View style={styles.replyOptionsContainer}>
           <Text style={styles.replyOptionsText}>Reply to original message</Text>
           <Switch

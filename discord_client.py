@@ -12,7 +12,10 @@ _session = requests.Session()
 _session.headers.update({
     "Authorization": config.DISCORD_TOKEN,
     "Content-Type": "application/json",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    )
 })
 
 # Rate limit tracking
@@ -186,30 +189,61 @@ def get_conversation_history(channel_id: str, limit: int | None = None) -> list[
     return all_messages
 
 
+def trigger_typing(channel_id: str) -> None:
+    """Send a typing indicator to a channel."""
+    try:
+        _api_request("POST", f"/channels/{channel_id}/typing")
+    except Exception:
+        pass
+
+
 def send_message(channel_id: str, content: str) -> dict | None:
     """
-    Send a message to a DM channel.
+    Send a message naturally — splits on newlines, types before each part.
+    This simulates human behavior to avoid anti-spam bans.
     
-    Args:
-        channel_id: The DM channel ID
-        content: Message text to send
-    
-    Returns:
-        The sent message object, or None on failure
+    Returns the final message object on success, or None on failure.
     """
-    response = _api_request(
-        "POST",
-        f"/channels/{channel_id}/messages",
-        json={"content": content}
-    )
-
-    if response is None:
-        print(f"❌ Failed to send message to channel {channel_id}")
+    import random
+    
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    if not lines:
         return None
+        
+    last_result = None
+    
+    for i, line in enumerate(lines):
+        # Trigger typing indicator
+        trigger_typing(channel_id)
 
-    result = response.json()
-    print(f"✅ Message sent to channel {channel_id}: {content[:50]}...")
-    return result
+        # Wait a bit to simulate typing
+        char_count = len(line)
+        typing_time = min(max(char_count * random.uniform(0.03, 0.06), 1.0), 8.0)
+        
+        # We need to print without newlines so it updates naturally
+        print(f"   ✍️  Typing... ({typing_time:.1f}s)", end="\r", flush=True)
+        time.sleep(typing_time)
+        print(" " * 40, end="\r") # clear the line
+        
+        # Send this part
+        response = _api_request(
+            "POST",
+            f"/channels/{channel_id}/messages",
+            json={"content": line}
+        )
+
+        if response is None:
+            print(f"❌ Failed to send part to channel {channel_id}")
+            return None
+            
+        last_result = response.json()
+        print(f"✅ Sent part: {line[:50]}...")
+        
+        # Small pause between messages if multiple parts
+        if i < len(lines) - 1:
+            time.sleep(random.uniform(0.5, 1.5))
+            
+    return last_result
 
 
 def get_user_info() -> dict | None:

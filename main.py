@@ -258,7 +258,7 @@ def step_4_cleanup(queue: dict) -> dict:
     return queue
 
 
-def run_pipeline():
+def run_pipeline(workflow_start_time_iso: str = None):
     """Execute the full pipeline."""
     start = time.time()
     print("🚀 Discord DM Auto-Responder Pipeline Starting...")
@@ -277,6 +277,11 @@ def run_pipeline():
     # Load state and queue from Gist
     state = gist_store.get_state()
     queue = gist_store.get_queue()
+    
+    # Update pipeline metadata for mobile app
+    if workflow_start_time_iso:
+        state["workflow_start_time"] = workflow_start_time_iso
+    state["last_ping_time"] = datetime.now(timezone.utc).isoformat()
 
     try:
         # Step 1: Check for new messages
@@ -317,6 +322,7 @@ if __name__ == "__main__":
     LOOP_INTERVAL_SECONDS = int(config.CHECK_INTERVAL) if hasattr(config, 'CHECK_INTERVAL') else 300
     
     start_time = time.time()
+    start_time_iso = datetime.now(timezone.utc).isoformat()
     print(f"🔄 Starting continuous 6-hour runner. Will loop every {LOOP_INTERVAL_SECONDS/60:.1f} minutes.")
     
     iteration = 1
@@ -331,7 +337,7 @@ if __name__ == "__main__":
         print("="*80)
         
         try:
-            run_pipeline()
+            run_pipeline(start_time_iso)
         except Exception as e:
             print(f"❌ Error in iteration {iteration}: {e}")
         

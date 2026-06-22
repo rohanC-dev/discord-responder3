@@ -6,22 +6,24 @@ import { useFocusEffect, useRouter, usePathname } from 'expo-router';
 import { useState, useCallback, createContext, useContext } from 'react';
 
 import { palette } from '@/constants/Colors';
-import { fetchQueue } from '@/services/gistService';
-import type { Queue, QueueItem } from '@/types/queue';
+import { fetchQueue, fetchState } from '@/services/gistService';
+import type { Queue, QueueItem, AppState } from '@/types/queue';
 
 // Provide queue data to child screens
 export const QueueContext = createContext<{
   queue: Queue | null;
+  appState: AppState | null;
+  isLoading: boolean;
   refreshing: boolean;
   onRefresh: () => void;
-}>({ queue: null, refreshing: false, onRefresh: () => {} });
+}>({ queue: null, appState: null, isLoading: true, refreshing: false, onRefresh: () => {} });
 
 export function useQueue() {
   return useContext(QueueContext);
 }
 
 function CustomDrawerContent(props: any) {
-  const { queue, refreshing, onRefresh } = useQueue();
+  const { queue, appState, refreshing, onRefresh } = useQueue();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -40,6 +42,28 @@ function CustomDrawerContent(props: any) {
 
   const uniqueConversations = Array.from(convMap.values())
     .sort((a, b) => new Date(b.item.created_at).getTime() - new Date(a.item.created_at).getTime());
+
+  // Determine workflow status
+  let isWorkflowRunning = false;
+  let workflowDuration = '';
+  
+  if (appState?.last_ping_time && appState?.workflow_start_time) {
+    const lastPing = new Date(appState.last_ping_time).getTime();
+    const now = Date.now();
+    // If it pinged within the last 2 minutes, consider it running
+    if (now - lastPing < 2 * 60 * 1000) {
+      isWorkflowRunning = true;
+      const start = new Date(appState.workflow_start_time).getTime();
+      const diffMin = Math.floor((now - start) / 60000);
+      if (diffMin < 60) {
+        workflowDuration = `${diffMin}m`;
+      } else {
+        const hours = Math.floor(diffMin / 60);
+        const mins = diffMin % 60;
+        workflowDuration = `${hours}h ${mins}m`;
+      }
+    }
+  }
 
   return (
     <DrawerContentScrollView 
@@ -90,24 +114,42 @@ function CustomDrawerContent(props: any) {
           </Pressable>
         );
       })}
+      
+      {/* Workflow Status Indicator */}
+      <View style={styles.workflowStatusContainer}>
+        <View style={[styles.statusDot, { backgroundColor: isWorkflowRunning ? palette.brand.success : palette.text.tertiary }]} />
+        <View>
+          <Text style={styles.workflowStatusText}>
+            Backend: {isWorkflowRunning ? 'Running' : 'Stopped'}
+          </Text>
+          {isWorkflowRunning && (
+            <Text style={styles.workflowDurationText}>Uptime: {workflowDuration}</Text>
+          )}
+        </View>
+      </View>
     </DrawerContentScrollView>
   );
 }
 
 export default function DMLayout() {
   const [queue, setQueue] = useState<Queue | null>(null);
+  const [appState, setAppState] = useState<AppState | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
+    else setIsLoading(true);
     try {
-      const data = await fetchQueue();
-      setQueue(data);
+      const [queueData, stateData] = await Promise.all([fetchQueue(), fetchState()]);
+      setQueue(queueData);
+      setAppState(stateData);
       setError(null);
     } catch (err: any) {
       setError(err.message);
     } finally {
+      setIsLoading(false);
       if (isRefresh) setRefreshing(false);
     }
   };
@@ -120,7 +162,7 @@ export default function DMLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueueContext.Provider value={{ queue, refreshing, onRefresh: () => loadData(true) }}>
+      <QueueContext.Provider value={{ queue, appState, isLoading, refreshing, onRefresh: () => loadData(true) }}>
         <Drawer
           drawerContent={(props) => <CustomDrawerContent {...props} />}
           screenOptions={{
@@ -240,5 +282,31 @@ const styles = StyleSheet.create({
   friendNameActive: {
     color: palette.text.primary,
     fontWeight: '600',
+  },
+  workflowStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: palette.dark.border,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 10,
+  },
+  workflowStatusText: {
+    color: palette.text.secondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  workflowDurationText: {
+    color: palette.text.tertiary,
+    fontSize: 11,
+    marginTop: 2,
   },
 });

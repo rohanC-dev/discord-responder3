@@ -5,7 +5,7 @@ import ReplyCard from '@/components/ReplyCard';
 import { approveReply, skipReply } from '@/services/gistService';
 
 export default function DMIndexScreen() {
-  const { queue, onRefresh } = useQueue();
+  const { queue, isLoading, onRefresh } = useQueue();
 
   const handleApprove = async (itemId: string) => {
     try {
@@ -25,10 +25,21 @@ export default function DMIndexScreen() {
     }
   };
 
-  if (!queue) {
+  if (isLoading) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={palette.brand.primary} />
+      </View>
+    );
+  }
+
+  if (!queue) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.title}>Not Connected</Text>
+        <Text style={styles.emptyText}>
+          Please configure your Gist ID and GitHub PAT in the Settings tab to connect to your auto-responder pipeline.
+        </Text>
       </View>
     );
   }

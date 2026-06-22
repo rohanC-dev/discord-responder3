@@ -36,6 +36,8 @@ export interface AppState {
   processed_message_ids: string[];
   run_count: number;
   last_run: string;
+  workflow_start_time?: string;
+  last_ping_time?: string;
 }
 
 export interface GistFile {
